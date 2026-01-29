@@ -1,0 +1,193 @@
+"""
+Soft-Voting Ensemble combining ResNet50, EfficientNet-V2, and ViT.
+"""
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from typing import Dict, Optional
+
+import sys
+sys.path.insert(0, str(__file__).rsplit('src', 1)[0])
+from config import NUM_CLASSES, ENSEMBLE_WEIGHTS
+from src.models.resnet_branch import ResNet50Branch
+from src.models.efficientnet_branch import EfficientNetBranch
+from src.models.vit_branch import ViTBranch
+
+
+class SoftVotingEnsemble(nn.Module):
+    """
+    Soft-Voting Ensemble that merges softmax outputs of three model branches.
+    
+    The ensemble computes a weighted average of the softmax probabilities
+    from ResNet50, EfficientNet-V2, and Vision Transformer models.
+    """
+    
+    def __init__(self,
+                 num_classes: int = NUM_CLASSES,
+                 weights: Optional[Dict[str, float]] = None,
+                 pretrained: bool = True):
+        """
+        Initialize the ensemble.
+        
+        Args:
+            num_classes: Number of output classes
+            weights: Dictionary of model weights for ensemble voting
+                     Keys: 'resnet50', 'efficientnet', 'vit'
+            pretrained: Whether to use pre-trained weights for all branches
+        """
+        super().__init__()
+        
+        # Initialize model branches
+        self.resnet = ResNet50Branch(num_classes=num_classes, pretrained=pretrained)
+        self.efficientnet = EfficientNetBranch(num_classes=num_classes, pretrained=pretrained)
+        self.vit = ViTBranch(num_classes=num_classes, pretrained=pretrained)
+        
+        # Set ensemble weights
+        if weights is None:
+            weights = ENSEMBLE_WEIGHTS
+        
+        # Normalize weights
+        total = sum(weights.values())
+        self.weights = {k: v / total for k, v in weights.items()}
+        
+        # Store as buffers for save/load
+        self.register_buffer('w_resnet', torch.tensor(self.weights['resnet50']))
+        self.register_buffer('w_efficientnet', torch.tensor(self.weights['efficientnet']))
+        self.register_buffer('w_vit', torch.tensor(self.weights['vit']))
+    
+    def forward(self, x: torch.Tensor, return_individual: bool = False):
+        """
+        Forward pass through ensemble.
+        
+        Args:
+            x: Input tensor of shape (B, C, H, W)
+            return_individual: If True, also return individual model outputs
+            
+        Returns:
+            If return_individual is False:
+                Combined logits of shape (B, num_classes)
+            If return_individual is True:
+                Tuple of (combined_logits, dict of individual logits)
+        """
+        # Get logits from each branch
+        logits_resnet = self.resnet(x)
+        logits_efficientnet = self.efficientnet(x)
+        logits_vit = self.vit(x)
+        
+        # Convert to probabilities (softmax)
+        probs_resnet = F.softmax(logits_resnet, dim=1)
+        probs_efficientnet = F.softmax(logits_efficientnet, dim=1)
+        probs_vit = F.softmax(logits_vit, dim=1)
+        
+        # Weighted average of probabilities (soft voting)
+        combined_probs = (
+            self.w_resnet * probs_resnet +
+            self.w_efficientnet * probs_efficientnet +
+            self.w_vit * probs_vit
+        )
+        
+        # Convert back to logits for loss computation
+        # Adding small epsilon to avoid log(0)
+        combined_logits = torch.log(combined_probs + 1e-10)
+        
+        if return_individual:
+            individual = {
+                'resnet50': logits_resnet,
+                'efficientnet': logits_efficientnet,
+                'vit': logits_vit
+            }
+            return combined_logits, individual
+        
+        return combined_logits
+    
+    def get_probabilities(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Get ensemble probabilities (softmax of combined logits).
+        
+        Args:
+            x: Input tensor
+            
+        Returns:
+            Probability distribution over classes
+        """
+        logits = self.forward(x)
+        return F.softmax(logits, dim=1)
+    
+    def get_model_branch(self, name: str) -> nn.Module:
+        """
+        Get a specific model branch.
+        
+        Args:
+            name: One of 'resnet50', 'efficientnet', 'vit'
+            
+        Returns:
+            The corresponding model branch
+        """
+        branches = {
+            'resnet50': self.resnet,
+            'efficientnet': self.efficientnet,
+            'vit': self.vit
+        }
+        if name not in branches:
+            raise ValueError(f"Unknown branch: {name}. Choose from {list(branches.keys())}")
+        return branches[name]
+    
+    def get_target_layers(self) -> Dict[str, nn.Module]:
+        """
+        Get target layers for Grad-CAM from each branch.
+        
+        Returns:
+            Dictionary mapping branch names to their target layers
+        """
+        return {
+            'resnet50': self.resnet.get_target_layer(),
+            'efficientnet': self.efficientnet.get_target_layer(),
+            'vit': self.vit.get_target_layer()
+        }
+    
+    def freeze_branches(self, branch_names: list = None):
+        """
+        Freeze specific branches.
+        
+        Args:
+            branch_names: List of branch names to freeze. If None, freeze all.
+        """
+        if branch_names is None:
+            branch_names = ['resnet50', 'efficientnet', 'vit']
+        
+        for name in branch_names:
+            branch = self.get_model_branch(name)
+            for param in branch.parameters():
+                param.requires_grad = False
+    
+    def unfreeze_all(self):
+        """Unfreeze all model parameters."""
+        for param in self.parameters():
+            param.requires_grad = True
+    
+    def get_trainable_params(self) -> int:
+        """Get the number of trainable parameters."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    
+    def get_total_params(self) -> int:
+        """Get the total number of parameters."""
+        return sum(p.numel() for p in self.parameters())
+
+
+if __name__ == "__main__":
+    # Quick test
+    model = SoftVotingEnsemble()
+    x = torch.randn(2, 3, 384, 384)
+    
+    # Test forward
+    out = model(x)
+    print(f"Ensemble output shape: {out.shape}")  # Expected: (2, 5)
+    
+    # Test with individual outputs
+    out, individual = model(x, return_individual=True)
+    for name, logits in individual.items():
+        print(f"{name} output shape: {logits.shape}")
+    
+    # Print parameter counts
+    print(f"\nTotal parameters: {model.get_total_params():,}")
+    print(f"Trainable parameters: {model.get_trainable_params():,}")
