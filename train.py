@@ -7,6 +7,7 @@ Usage:
 """
 import argparse
 import time
+import csv
 from datetime import datetime
 
 import torch
@@ -18,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import (
     DEVICE, BATCH_SIZE, NUM_EPOCHS, 
-    CHECKPOINT_DIR, CLASS_NAMES
+    CHECKPOINT_DIR, CLASS_NAMES, METRICS_DIR
 )
 from src.dataset import create_data_loaders
 from src.models import SoftVotingEnsemble
@@ -31,6 +32,40 @@ from src.training import (
     save_checkpoint
 )
 from src.validation import generate_all_metrics
+
+# Predictions CSV file path
+PREDICTIONS_CSV = METRICS_DIR / "epoch_predictions.csv"
+
+
+def init_predictions_csv():
+    """Initialize the predictions CSV file with headers."""
+    with open(PREDICTIONS_CSV, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['epoch', 'sample_idx', 'y_true', 'y_pred', 'y_true_class', 'y_pred_class'])
+    print(f"📝 Predictions will be saved to: {PREDICTIONS_CSV}")
+
+
+def save_epoch_predictions(epoch: int, y_true: list, y_pred: list):
+    """
+    Append predictions for an epoch to the CSV file.
+    
+    Args:
+        epoch: Current epoch number (1-indexed)
+        y_true: List of true labels
+        y_pred: List of predicted labels
+    """
+    with open(PREDICTIONS_CSV, 'a', newline='') as f:
+        writer = csv.writer(f)
+        for idx, (true_label, pred_label) in enumerate(zip(y_true, y_pred)):
+            writer.writerow([
+                epoch,
+                idx,
+                true_label,
+                pred_label,
+                CLASS_NAMES[true_label],
+                CLASS_NAMES[pred_label]
+            ])
+    print(f"  💾 Saved {len(y_true)} predictions for epoch {epoch}")
 
 
 def parse_args():
@@ -135,6 +170,9 @@ def main():
         best_val_acc = checkpoint.get('accuracy', 0.0)
         print(f"  Resuming from epoch {start_epoch}")
     
+    # Initialize predictions CSV
+    init_predictions_csv()
+    
     # Training loop
     print("\n" + "-" * 70)
     print("TRAINING STARTED")
@@ -162,6 +200,9 @@ def main():
         # Print epoch summary
         print(f"\nEpoch {epoch+1}/{args.epochs} ({epoch_time:.1f}s)")
         print(f"  Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
+        
+        # Save predictions for this epoch
+        save_epoch_predictions(epoch + 1, val_labels, val_preds)
         print(f"  Val Loss:   {val_loss:.4f} | Val Acc:   {val_acc:.2f}%")
         
         # Save checkpoint
