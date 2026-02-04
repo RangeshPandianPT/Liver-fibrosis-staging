@@ -1,0 +1,77 @@
+{
+  "model": "ViT-B/16",
+  "task": "Liver Fibrosis Staging (F0-F4)",
+  "per_class_metrics": {
+    "F0": {
+      "sensitivity": 1.0,
+      "specificity": 1.0,
+      "ppv": 1.0,
+      "npv": 1.0,
+      "tp": 2114,
+      "fn": 0,
+      "fp": 0,
+      "tn": 4209
+    },
+    "F1": {
+      "sensitivity": 0.9094,
+      "specificity": 0.9943,
+      "ppv": 0.9619,
+      "npv": 0.9858,
+      "tp": 783,
+      "fn": 78,
+      "fp": 31,
+      "tn": 5431
+    },
+    "F2": {
+      "sensitivity": 0.9218,
+      "specificity": 0.994,
+      "ppv": 0.9568,
+      "npv": 0.9888,
+      "tp": 731,
+      "fn": 62,
+      "fp": 33,
+      "tn": 5497
+    },
+    "F3": {
+      "sensitivity": 0.9732,
+      "specificity": 0.9892,
+      "ppv": 0.9339,
+      "npv": 0.9958,
+      "tp": 834,
+      "fn": 23,
+      "fp": 59,
+      "tn": 5407
+    },
+    "F4": {
+      "sensitivity": 0.9976,
+      "specificity": 0.9905,
+      "ppv": 0.9747,
+      "npv": 0.9991,
+      "tp": 1694,
+      "fn": 4,
+      "fp": 44,
+      "tn": 4581
+    }
+  },
+  "binary_classification": {
+    "description": "Early (F0-F2) vs Advanced (F3-F4) Fibrosis",
+    "metrics": {
+      "accuracy": 0.9807,
+      "sensitivity": 0.991,
+      "specificity": 0.9737,
+      "ppv": 0.9624,
+      "npv": 0.9938,
+      "f1_score": 0.9765,
+      "confusion_matrix": {
+        "tn": 3669,
+        "fp": 99,
+        "fn": 23,
+        "tp": 2532
+      }
+    }
+  },
+  "summary": {
+    "avg_sensitivity": 0.9604,
+    "avg_specificity": 0.9936
+  }
+}

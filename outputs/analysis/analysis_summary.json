@@ -1,0 +1,22 @@
+{
+  "roc_auc": {
+    "per_class": {
+      "F0": 1.0,
+      "F1": 0.9938,
+      "F2": 0.9943,
+      "F3": 0.9983,
+      "F4": 0.9993
+    },
+    "micro_avg": 0.9981,
+    "macro_avg": 0.9972
+  },
+  "average_precision": {
+    "F0": 1.0,
+    "F1": 0.9804,
+    "F2": 0.9819,
+    "F3": 0.9902,
+    "F4": 0.9962
+  },
+  "model": "ViT-B/16",
+  "best_validation_accuracy": 0.951
+}
