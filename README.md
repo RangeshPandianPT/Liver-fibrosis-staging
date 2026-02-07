@@ -1,76 +1,97 @@
 # Medical CV Pipeline for Liver Fibrosis Staging
 
-This project implements a deep learning ensemble pipeline for automated liver fibrosis staging (F0-F4)
-using ResNet50, EfficientNet-V2, and Vision Transformer models.
+This project implements a state-of-the-art Deep Learning Ensemble Pipeline for automated Liver Fibrosis Staging (F0-F4) using ResNet50, EfficientNet-V2, and Vision Transformer (ViT) models. It features a fully automated workflow from raw images to comprehensive PDF reports.
 
-## Installation
+## 🚀 Key Features
+
+*   **Multi-Model Ensemble**: Combines predictions from ResNet50, EfficientNet-V2, and ViT (Vision Transformer) using a weighted Soft-Voting mechanism.
+*   **Automated Pipeline**: A single script (`run_full_pipeline.py`) handles prediction generation, ensemble analysis, and report generation.
+*   **Explainable AI (XAI)**: Generates Grad-CAM heatmaps for ViT and CNNs to visualize model attention.
+*   **Comprehensive Reporting**:
+    *   **PDF Reports**: Auto-generated PDF reports summarizing model performance, confusion matrices, and key metrics.
+    *   **Detailed Metrics**: Calculates Accuracy, F1-Score (Macro), and Quadratic Weighted Kappa (QWK) with 95% Confidence Intervals.
+    *   **Visualizations**: Confusion matrices, fold comparison charts, and per-class accuracy plots.
+*   **Robust Training**: Supports Stratified K-Fold Cross-Validation for reliable performance estimation.
+*   **Data Handling**: Automated preprocessing (CLAHE, Resizing) and class imbalance handling using Weighted Loss/SMOTE strategies.
+
+## 🛠️ Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage
+## ⚡ Usage
 
-### Standard Training (Train/Val Split)
+### 1. Run the Full Pipeline (Recommended)
+The easiest way to run the inference and reporting workflow:
 ```bash
-python train.py --epochs 50 --batch_size 16
+python run_full_pipeline.py
+```
+This script will sequentially:
+1.  Generate predictions from all models (ResNet50, EfficientNet, ViT).
+2.  Run the Ensemble Pathologist (Soft-Voting).
+3.  Generate a consolidated PDF Report in `outputs/`.
+
+### 2. Individual Modules
+You can also run specific parts of the pipeline independently:
+
+**Ensemble Analysis:**
+```bash
+python run_ensemble_pathologist.py
 ```
 
-### K-Fold Cross-Validation (Recommended for Research Papers)
+**Generate ViT Heatmaps:**
 ```bash
-# Full training with 5-fold cross-validation
+python run_vit_specialist_tasks.py
+```
+
+### 3. Training
+To train the models from scratch:
+
+**K-Fold Cross-Validation (Full Evaluation):**
+```bash
 python train_kfold.py --folds 5 --epochs 50
-
-# Quick test run
-python train_kfold.py --folds 5 --epochs 1 --dry_run
-
-# Save model checkpoints for each fold
-python train_kfold.py --folds 5 --epochs 50 --save_all_folds
 ```
 
-Cross-validation outputs:
-- `outputs/metrics/cross_validation/cv_results.json` - Detailed results
-- `outputs/metrics/cross_validation/cv_summary.txt` - Paper-ready summary
-- `outputs/metrics/cross_validation/fold_comparison.png` - Visualization
-- `outputs/metrics/cross_validation/per_class_accuracy.png` - Per-class chart
-
-### Evaluation
+**Train Individual Models:**
 ```bash
-python evaluate.py --checkpoint outputs/checkpoints/best_model.pth
+python train_cnn_models.py --model resnet50 --epochs 30
+python train_vit_light.py --epochs 30
 ```
 
-### Generate Grad-CAM Heatmaps
-```bash
-python generate_heatmaps.py --checkpoint outputs/checkpoints/best_model.pth
-```
-
-## Project Structure
+## 📂 Project Structure
 
 ```
-├── train.py              # Standard training script
-├── train_kfold.py        # K-fold cross-validation training
-├── evaluate.py           # Model evaluation
-├── generate_heatmaps.py  # Grad-CAM visualization
-├── config.py             # Configuration settings
-├── src/
-│   ├── preprocessing.py  # CLAHE and image transforms
-│   ├── dataset.py        # PyTorch dataset and loaders
-│   ├── models/           # ResNet50, EfficientNet, ViT, Ensemble
-│   ├── training.py       # Training utilities
-│   ├── validation.py     # Metrics and evaluation
-│   ├── gradcam.py        # Grad-CAM heatmaps
-│   └── cross_validation.py  # K-fold CV utilities
-├── outputs/
-│   ├── checkpoints/      # Model weights
-│   ├── metrics/          # Evaluation results
-│   └── gradcam_heatmaps/ # Explainability visualizations
-└── data/liver_images/    # Input images (F0-F4 folders)
+├── run_full_pipeline.py        # 🚀 Main entry point for the full pipeline
+├── run_ensemble_pathologist.py # Ensemble voting and analysis logic
+├── requirements.txt            # Project dependencies
+├── build_ensemble.py           # (Internal) Helper for ensemble logic
+├── config.py                   # Configuration settings (paths, params)
+├── services/                   # Service modules for core logic
+├── data/                       # Dataset directory (F0-F4)
+├── src/                        # Source code for models and training
+│   ├── models/                 # Model definitions (ResNet, EfficientNet, ViT)
+│   ├── training.py             # Training loops and utilities
+│   ├── validation.py           # Metrics and validation logic
+│   └── gradcam.py              # XAI visualization tools
+├── outputs/                    # 📊 All generated outputs
+│   ├── checkpoints/            # Saved model weights (.pth)
+│   ├── metrics/                # JSON metrics and intermediate files
+│   ├── gradcam_heatmaps/       # Generated attention heatmaps
+│   └── final_analysis/         # Final ensemble results and charts
+└── reports/                    # Scripts for generating PDF reports
 ```
 
-## Research Paper Ready
+## 📊 Outputs & Reports
+The pipeline generates publication-ready outputs in the `outputs/` directory:
+*   `ensemble_analysis_report.pdf`: A complete summary of the pipeline's performance.
+*   `ensemble_confusion_matrix.png`: Visual confusion matrix.
+*   `ensemble_results.csv`: Detailed CSV with individual and ensemble predictions for every sample.
+*   `vit_heatmaps/`: Directory containing Grad-CAM visualizations.
 
-This pipeline produces paper-ready outputs including:
-- **95% confidence intervals** for all metrics
-- **Cohen's Kappa** (quadratic-weighted) for ordinal data
-- **Per-class accuracy** with standard deviations
-- **Visualization charts** suitable for publication
+## 🧪 Evaluation Metrics
+The pipeline evaluates using:
+*   **Accuracy**: Overall correctness.
+*   **Quadratic Weighted Kappa (QWK)**: Measures agreement for ordinal staging (F0-F4).
+*   **Macro F1-Score**: Balanced metric for multi-class performance.
+*   **Confusion Matrix**: Detailed breakdown of misclassifications.

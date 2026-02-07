@@ -1,0 +1,18 @@
+Ensemble Performance Report
+===========================
+Accuracy: 0.9439
+QWK Score: 0.9683
+F1 Macro: 0.9217
+
+Classification Report:
+              precision    recall  f1-score   support
+
+          F0       1.00      1.00      1.00       423
+          F1       0.87      0.95      0.91       172
+          F2       0.80      0.96      0.87       159
+          F3       0.98      0.77      0.86       171
+          F4       0.99      0.95      0.97       340
+
+    accuracy                           0.94      1265
+   macro avg       0.93      0.93      0.92      1265
+weighted avg       0.95      0.94      0.94      1265
