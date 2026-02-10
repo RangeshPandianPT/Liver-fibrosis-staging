@@ -35,7 +35,8 @@ FREEZE_BACKBONE = False
 ENSEMBLE_WEIGHTS = {
     'resnet50': 1.0,
     'efficientnet': 1.0,
-    'vit': 1.0
+    'vit': 1.0,
+    'deit': 1.0
 }
 
 # Training settings

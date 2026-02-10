@@ -20,14 +20,18 @@ import os
 BASE_DIR = Path(__file__).parent
 CNN_SCRIPT = BASE_DIR / "generate_cnn_predictions.py"
 VIT_SCRIPT = BASE_DIR / "run_vit_specialist_tasks.py"
+DEIT_SCRIPT = BASE_DIR / "generate_deit_predictions.py"
 ENSEMBLE_SCRIPT = BASE_DIR / "run_ensemble_pathologist.py"
 REPORT_SCRIPT = BASE_DIR / "reports" / "generate_ensemble_report.py"
+COMPARATIVE_REPORT_SCRIPT = BASE_DIR / "report_scripts" / "generate_comparative_report_pdf.py"
 
 # Checkpoints
 CHECKPOINTS = [
     BASE_DIR / "outputs" / "checkpoints" / "best_resnet_model.pth",
     BASE_DIR / "outputs" / "checkpoints" / "best_effnet_model.pth",
-    BASE_DIR / "outputs" / "vit_light" / "best_vit_model.pth"
+    BASE_DIR / "outputs" / "checkpoints" / "best_effnet_model.pth",
+    BASE_DIR / "outputs" / "vit_light" / "best_vit_model.pth",
+    BASE_DIR / "outputs" / "deit_small" / "best_deit_model.pth"
 ]
 
 def check_prerequisites():
@@ -86,12 +90,22 @@ def main():
     if not run_step(VIT_SCRIPT, "Generate ViT Predictions"):
         sys.exit(1)
         
+    # Step 2.5: DeiT Predictions
+    if not run_step(DEIT_SCRIPT, "Generate DeiT Predictions"):
+        print("Warning: DeiT prediction failed. Continuing without it...")
+        # We don't exit here, to allow partial runs if DeiT is not ready yet
+        pass
+        
     # Step 3: Ensemble Analysis
     if not run_step(ENSEMBLE_SCRIPT, "Run Ensemble Analysis"):
         sys.exit(1)
         
     # Step 4: PDF Report
     if not run_step(REPORT_SCRIPT, "Generate PDF Report"):
+        sys.exit(1)
+
+    # Step 5: Comparative Research Report
+    if not run_step(COMPARATIVE_REPORT_SCRIPT, "Generate Comparative Research Report"):
         sys.exit(1)
         
     total_time = time.time() - start_total

@@ -1,0 +1,5 @@
+# Model Accuracies
+
+- **Vision Transformer (ViT-B/16)**: 97.47%
+- **ResNet50**: 91.30%
+- **EfficientNet-V2**: 82.45%

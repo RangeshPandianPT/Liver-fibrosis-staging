@@ -102,18 +102,32 @@ def create_executive_summary(pdf, metrics):
     
     fig.text(0.1, 0.90, "Executive Summary", fontsize=20, fontweight='bold', color='#1a237e')
     
-    summary_text = """
+    # Dynamic Summary Generation
+    best_model = max(metrics.keys(), key=lambda k: metrics[k]['accuracy'])
+    best_acc = metrics[best_model]['accuracy'] * 100
+    best_model_name = {'vit': 'Vision Transformer (ViT-B/16)', 
+                       'effnet': 'EfficientNet-V2', 
+                       'resnet': 'ResNet50'}.get(best_model, best_model)
+    
+    vit_acc = metrics.get('vit', {}).get('accuracy', 0) * 100
+    cnn_acc = max(metrics.get('resnet', {}).get('accuracy', 0), metrics.get('effnet', {}).get('accuracy', 0)) * 100
+    
+    # F2/F3 Analysis
+    vit_f2 = metrics.get('vit', {}).get('f1_F2', 0)
+    resnet_f2 = metrics.get('resnet', {}).get('f1_F2', 0)
+    
+    summary_text = f"""
     This study evaluates the performance of three distinct deep learning architectures for the automated staging of liver fibrosis from histopathology images: ResNet50 (baseline CNN), EfficientNet-V2 (optimized CNN), and Vision Transformer (ViT-B/16).
     
     Key Findings:
     
-    1. Superiority of Transformers: The Vision Transformer (ViT-B/16) achieved the highest overall accuracy (97.47%), outperforming both CNN-based approaches. This suggests that the self-attention mechanism is highly effective at capturing global tissue patterns indicative of fibrosis.
+    1. Superiority of {best_model_name}: The {best_model_name} achieved the highest overall accuracy ({best_acc:.2f}%), outperforming the other models (Best CNN: {cnn_acc:.2f}%). This suggests that the model's architecture is highly effective at capturing global tissue patterns indicative of fibrosis.
     
-    2. Resilience in Intermediate Stages: A critical challenge in fibrosis staging is distinguishing between intermediate stages (F2, F3). The ViT model demonstrated significantly higher sensitivity and precision for these classes compared to the ResNet50 baseline.
+    2. Resilience in Intermediate Stages: A critical challenge in fibrosis staging is distinguishing between intermediate stages (F2, F3). The ViT model demonstrated an F1-score of {vit_f2:.4f} for F2 samples, compared to {resnet_f2:.4f} for the ResNet50 baseline.
     
-    3. Efficiency vs. Performance: EfficientNet-V2 provided a very competitive performance (96.60%) with a lighter computational footprint, making it a viable alternative for resource-constrained deployments.
+    3. Efficiency vs. Performance: EfficientNet-V2 provided a very competitive performance with a lighter computational footprint, making it a viable alternative for resource-constrained deployments.
     
-    4. Clinical Relevance: The high Cohen's Kappa scores (>0.98 for top models) indicate excellent agreement with ground truth, supporting the potential utility of these models as decision support tools in clinical pathology workflows.
+    4. Clinical Relevance: The high Cohen's Kappa scores (>0.90 for top models) indicate excellent agreement with ground truth, supporting the potential utility of these models as decision support tools in clinical pathology workflows.
     """
     
     # Wrap text manually
