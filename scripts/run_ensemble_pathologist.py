@@ -21,6 +21,7 @@ OUTPUT_DIR = BASE_DIR / "outputs"
 CNN_PREDS_PATH = OUTPUT_DIR / "cnn_predictions.csv"
 VIT_PREDS_PATH = OUTPUT_DIR / "vit_predictions.csv"
 DEIT_PREDS_PATH = OUTPUT_DIR / "deit_predictions.csv"
+CONVNEXT_PREDS_PATH = OUTPUT_DIR / "convnext" / "convnext_predictions.csv"
 RESULTS_PATH = OUTPUT_DIR / "ensemble_results.csv"
 ANALYSIS_DIR = OUTPUT_DIR / "final_analysis"
 ANALYSIS_DIR.mkdir(exist_ok=True)
@@ -34,25 +35,43 @@ def load_and_merge_data():
         raise FileNotFoundError(f"CNN predictions not found at {CNN_PREDS_PATH}")
     if not VIT_PREDS_PATH.exists():
         raise FileNotFoundError(f"ViT predictions not found at {VIT_PREDS_PATH}")
-    if not DEIT_PREDS_PATH.exists():
-        print(f"Warning: DeiT predictions not found at {DEIT_PREDS_PATH}. Proceeding without DeiT.")
-        deit_df = None
-    else:
+    
+    # Optional Models
+    deit_df = None
+    if DEIT_PREDS_PATH.exists():
         deit_df = pd.read_csv(DEIT_PREDS_PATH)
+    else:
+        print(f"Warning: DeiT predictions not found. Proceeding without DeiT.")
+
+    convnext_df = None
+    if CONVNEXT_PREDS_PATH.exists():
+        convnext_df = pd.read_csv(CONVNEXT_PREDS_PATH)
+    else:
+        print(f"Warning: ConvNeXt predictions not found at {CONVNEXT_PREDS_PATH}. Proceeding without ConvNeXt.")
         
     cnn_df = pd.read_csv(CNN_PREDS_PATH)
     vit_df = pd.read_csv(VIT_PREDS_PATH)
     
-    # Merge (ViT might have duplicates if code wasn't perfect, drop them just in case)
+    # Ensure all dataframes have 'filename' column
+    for df_name, df in [('cnn', cnn_df), ('vit', vit_df)]:
+        if 'filename' not in df.columns and 'image_path' in df.columns:
+            df['filename'] = df['image_path'].apply(lambda x: Path(x).name)
+    
+    # Merge (drop duplicates)
     cnn_df = cnn_df.drop_duplicates(subset=['filename'])
     vit_df = vit_df.drop_duplicates(subset=['filename'])
     if deit_df is not None:
+        if 'filename' not in deit_df.columns and 'image_path' in deit_df.columns:
+            deit_df['filename'] = deit_df['image_path'].apply(lambda x: Path(x).name)
         deit_df = deit_df.drop_duplicates(subset=['filename'])
+    if convnext_df is not None:
+        # Ensure 'filename' column exists (it might be 'image_path' from generate_universal)
+        if 'filename' not in convnext_df.columns and 'image_path' in convnext_df.columns:
+            convnext_df['filename'] = convnext_df['image_path'].apply(lambda x: Path(x).name)
+        convnext_df = convnext_df.drop_duplicates(subset=['filename'])
     
     # Merge
     # CNN DF has: filename, true_label, resnet_*, effnet_*
-    # ViT DF has: filename, true_label, vit_*
-    # DeiT DF has: filename, true_label, deit_*
     
     merged = pd.merge(cnn_df, vit_df[['filename'] + [c for c in vit_df.columns if 'vit' in c]], 
                       on='filename', how='inner')
@@ -60,6 +79,10 @@ def load_and_merge_data():
     if deit_df is not None:
         merged = pd.merge(merged, deit_df[['filename'] + [c for c in deit_df.columns if 'deit' in c]],
                           on='filename', how='inner')
+                          
+    if convnext_df is not None:
+        cols = ['filename'] + [c for c in convnext_df.columns if 'convnext' in c]
+        merged = pd.merge(merged, convnext_df[cols], on='filename', how='inner')
     
     print(f"Merged {len(merged)} samples.")
     return merged
@@ -71,12 +94,14 @@ def weighted_soft_voting(row):
     - ViT (Excellent at F2-F4): Weight 1.2
     - EfficientNet (Strong overall): Weight 1.0
     - ResNet (Baseline): Weight 0.8
+    - ConvNeXt (New Gen): Weight 1.1
     """
     # Weights
     W_VIT = 1.2
     W_EFF = 1.0
     W_RES = 0.8
     W_DEIT = 1.0
+    W_CONV = 1.1
     
     probs = np.zeros(5)
     
@@ -85,19 +110,21 @@ def weighted_soft_voting(row):
         p_eff = row.get(f'effnet_f{i}_prob', 0)
         p_vit = row.get(f'vit_f{i}_prob', 0)
         p_deit = row.get(f'deit_f{i}_prob', 0)
+        p_conv = row.get(f'convnext_f{i}_prob', 0)
         
         # Weighted Sum
-        score = (p_res * W_RES) + (p_eff * W_EFF) + (p_vit * W_VIT) + (p_deit * W_DEIT)
+        score = (p_res * W_RES) + (p_eff * W_EFF) + (p_vit * W_VIT) + (p_deit * W_DEIT) + (p_conv * W_CONV)
         probs[i] = score
         
     return np.argmax(probs) # return class index
 
 def weighted_soft_voting_probs(row):
-    """Return aggregated probabilities for calculating metrics like AUC if needed."""
+    """Return aggregated probabilities."""
     W_VIT = 1.2
     W_EFF = 1.0
     W_RES = 0.8
     W_DEIT = 1.0
+    W_CONV = 1.1
     
     probs = np.zeros(5)
     for i in range(5):
@@ -105,7 +132,9 @@ def weighted_soft_voting_probs(row):
         p_eff = row.get(f'effnet_f{i}_prob', 0)
         p_vit = row.get(f'vit_f{i}_prob', 0)
         p_deit = row.get(f'deit_f{i}_prob', 0)
-        probs[i] = (p_res * W_RES) + (p_eff * W_EFF) + (p_vit * W_VIT) + (p_deit * W_DEIT)
+        p_conv = row.get(f'convnext_f{i}_prob', 0)
+        
+        probs[i] = (p_res * W_RES) + (p_eff * W_EFF) + (p_vit * W_VIT) + (p_deit * W_DEIT) + (p_conv * W_CONV)
     
     # Normalize
     return probs / probs.sum()

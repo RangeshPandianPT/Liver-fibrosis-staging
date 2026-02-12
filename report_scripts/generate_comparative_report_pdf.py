@@ -13,6 +13,10 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 import textwrap
+import pandas as pd
+import seaborn as sns
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support, cohen_kappa_score, roc_auc_score, confusion_matrix, roc_curve, auc
+from sklearn.preprocessing import label_binarize
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
@@ -26,16 +30,191 @@ OUTPUT_DIR = BASE_DIR / "Research_Materials"
 # PROBABLY better to point to original output dir to avoid breaking changes if they re-run inferences.
 OUTPUT_DIR = BASE_DIR / "outputs"
 VIT_METRICS = OUTPUT_DIR / "metrics" / "vit_evaluation" / "vit_evaluation_results.json"
-CNN_METRICS = OUTPUT_DIR / "metrics" / "cnn_evaluation" / "evaluation_results.json"
-PDF_OUTPUT = OUTPUT_DIR / "comparative_research_report.pdf"
+CNN_PREDICTIONS = BASE_DIR / "Research_Materials" / "Data_CSVs" / "Model_Predictions" / "cnn_predictions.csv"
+DEIT_PREDICTIONS = OUTPUT_DIR / "deit_predictions.csv"
+MANIFEST_CSV = OUTPUT_DIR / "dataset_manifest.csv"
+PDF_OUTPUT = OUTPUT_DIR / "cumulative_model_report.pdf"
 
 CLASS_NAMES = ['F0', 'F1', 'F2', 'F3', 'F4']
+
+def process_deit():
+    """Calculate DeiT metrics and generate plots."""
+    if not DEIT_PREDICTIONS.exists():
+        print("DeiT predictions not found.")
+        return None
+        
+    df = pd.read_csv(DEIT_PREDICTIONS)
+    
+    # Filter for Test set if manifest exists
+    if MANIFEST_CSV.exists():
+        manifest = pd.read_csv(MANIFEST_CSV)
+        if 'filename' not in manifest.columns:
+            manifest['filename'] = manifest['image_path'].apply(lambda x: Path(x).name)
+        
+        # Merge
+        if 'filename' in df.columns:
+            df = pd.merge(df, manifest[['filename', 'assigned_split']], on='filename', how='inner')
+            df = df[df['assigned_split'] == 'Test']
+        else:
+            print("Warning: Filename not in DeiT preds. Using all.")
+            
+    if len(df) == 0: return None
+
+    y_true = df['true_label'].values
+    prob_cols = [c for c in df.columns if 'deit_f' in c and 'prob' in c]
+    y_pred_probs = df[prob_cols].values
+    y_pred_idx = np.argmax(y_pred_probs, axis=1)
+    y_pred = [CLASS_NAMES[i] for i in y_pred_idx]
+    
+    # --- Generate Plots ---
+    
+    # 1. Confusion Matrix
+    cm = confusion_matrix(y_true, y_pred, labels=CLASS_NAMES)
+    cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(cm_norm, annot=True, fmt='.2f', cmap='Blues', 
+                xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES)
+    plt.title('DeiT-Small')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "deit_confusion_matrix.png", dpi=100)
+    plt.close()
+    
+    # 2. ROC Curves
+    y_true_bin = label_binarize(y_true, classes=CLASS_NAMES)
+    plt.figure(figsize=(6, 5))
+    for i, class_name in enumerate(CLASS_NAMES):
+        fpr, tpr, _ = roc_curve(y_true_bin[:, i], y_pred_probs[:, i])
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, lw=2, label=f'{class_name} ({roc_auc:.2f})')
+        
+    plt.plot([0, 1], [0, 1], 'k--', lw=2)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('FPR')
+    plt.ylabel('TPR')
+    plt.title('DeiT-Small')
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    plt.savefig(OUTPUT_DIR / "deit_roc_curves.png", dpi=100)
+    plt.close()
+
+    # --- Calculate Metrics ---
+    acc = accuracy_score(y_true, y_pred)
+    kappa = cohen_kappa_score(y_true, y_pred)
+    precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average='macro')
+    
+    # Per class F1
+    p, r, f, _ = precision_recall_fscore_support(y_true, y_pred, labels=CLASS_NAMES)
+    
+    metrics = {
+        'accuracy': acc,
+        'cohens_kappa': kappa,
+        'f1_macro': f1,
+        'precision_macro': precision,
+        'recall_macro': recall,
+        'f1_F0': f[0], 'f1_F1': f[1], 'f1_F2': f[2], 'f1_F3': f[3], 'f1_F4': f[4]
+    }
+    return metrics
+
+def process_cnn_from_csv():
+    """Calculate ResNet and EffNet metrics from CSV and generate plots."""
+    if not CNN_PREDICTIONS.exists():
+        print(f"CNN predictions not found at {CNN_PREDICTIONS}")
+        return {}
+        
+    df = pd.read_csv(CNN_PREDICTIONS)
+    if len(df) == 0: return {}
+    
+    # Filter for Test set if manifest exists
+    # Note: cnn_predictions might already be just test, but let's check manifest if possible
+    # The user said cnn_predictions.csv is in Research_Materials, might be all data?
+    # Let's perform the filter to be safe if filename column matches
+    
+    if MANIFEST_CSV.exists() and 'filename' in df.columns:
+        manifest = pd.read_csv(MANIFEST_CSV)
+        if 'filename' not in manifest.columns:
+            manifest['filename'] = manifest['image_path'].apply(lambda x: Path(x).name)
+        
+        df = pd.merge(df, manifest[['filename', 'assigned_split']], on='filename', how='inner')
+        df = df[df['assigned_split'] == 'Test']
+        print(f"Filtered CNN predictions to Test set: {len(df)}")
+    
+    if len(df) == 0: return {}
+
+    y_true = df['true_label'].values
+    cnn_results = {}
+    
+    for model_prefix in ['resnet', 'effnet']:
+        prob_cols = [c for c in df.columns if model_prefix in c and 'prob' in c]
+        if not prob_cols: continue
+        
+        y_pred_probs = df[prob_cols].values
+        y_pred_idx = np.argmax(y_pred_probs, axis=1)
+        y_pred = [CLASS_NAMES[i] for i in y_pred_idx]
+        
+        # --- Generate Plots ---
+        # 1. Confusion Matrix
+        cm = confusion_matrix(y_true, y_pred, labels=CLASS_NAMES)
+        cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        
+        plt.figure(figsize=(6, 5))
+        sns.heatmap(cm_norm, annot=True, fmt='.2f', cmap='Blues', 
+                    xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES)
+        model_name = 'ResNet50' if model_prefix == 'resnet' else 'EfficientNet-V2'
+        plt.title(model_name)
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.tight_layout()
+        plt.savefig(OUTPUT_DIR / f"{model_prefix}_confusion_matrix.png", dpi=100)
+        plt.close()
+        
+        # 2. ROC Curves
+        y_true_bin = label_binarize(y_true, classes=CLASS_NAMES)
+        plt.figure(figsize=(6, 5))
+        for i, class_name in enumerate(CLASS_NAMES):
+            fpr, tpr, _ = roc_curve(y_true_bin[:, i], y_pred_probs[:, i])
+            roc_auc = auc(fpr, tpr)
+            plt.plot(fpr, tpr, lw=2, label=f'{class_name} ({roc_auc:.2f})')
+            
+        plt.plot([0, 1], [0, 1], 'k--', lw=2)
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('FPR')
+        plt.ylabel('TPR')
+        plt.title(model_name)
+        plt.legend(loc="lower right")
+        plt.tight_layout()
+        plt.savefig(OUTPUT_DIR / f"{model_prefix}_roc_curves.png", dpi=100)
+        plt.close()
+
+        # --- Calculate Metrics ---
+        acc = accuracy_score(y_true, y_pred)
+        kappa = cohen_kappa_score(y_true, y_pred)
+        precision, recall, f1, _ = precision_recall_fscore_support(y_true, y_pred, average='macro')
+        
+        p, r, f, _ = precision_recall_fscore_support(y_true, y_pred, labels=CLASS_NAMES)
+        
+        metrics = {
+            'accuracy': acc,
+            'cohens_kappa': kappa,
+            'f1_macro': f1,
+            'precision_macro': precision,
+            'recall_macro': recall,
+            'f1_F0': f[0], 'f1_F1': f[1], 'f1_F2': f[2], 'f1_F3': f[3], 'f1_F4': f[4]
+        }
+        cnn_results[model_prefix] = metrics
+        print(f"Processed {model_name} metrics.")
+        
+    return cnn_results
 
 def load_all_metrics():
     """Load and merge metrics from all sources."""
     combined_metrics = {}
     
-    # Load ViT
+    # Load ViT (keep existing logic as it worked well)
     if VIT_METRICS.exists():
         try:
             with open(VIT_METRICS) as f:
@@ -44,18 +223,16 @@ def load_all_metrics():
         except Exception as e:
             print(f"Error loading ViT metrics: {e}")
 
-    # Load CNN (ResNet + EffNet)
-    if CNN_METRICS.exists():
-        try:
-            with open(CNN_METRICS) as f:
-                cnn_data = json.load(f)
-                if 'resnet' in cnn_data:
-                    combined_metrics['resnet'] = cnn_data['resnet']
-                if 'effnet' in cnn_data:
-                    combined_metrics['effnet'] = cnn_data['effnet']
-            print("Loaded CNN metrics.")
-        except Exception as e:
-            print(f"Error loading CNN metrics: {e}")
+    # Load CNNs (ResNet + EffNet) from CSV
+    cnn_metrics = process_cnn_from_csv()
+    if cnn_metrics:
+        combined_metrics.update(cnn_metrics)
+            
+    # Load DeiT
+    deit_metrics = process_deit()
+    if deit_metrics:
+        combined_metrics['deit'] = deit_metrics
+        print("Loaded DeiT metrics.")
             
     return combined_metrics
 
@@ -88,7 +265,7 @@ def create_title_page(pdf, metrics):
     fig.add_artist(rect)
     
     fig.text(0.5, 0.40, "Top Performing Model", fontsize=14, ha='center', fontweight='bold', color='#1B5E20')
-    name_map = {'vit': 'ViT-B/16', 'effnet': 'EfficientNet-V2', 'resnet': 'ResNet50'}
+    name_map = {'vit': 'ViT-B/16', 'effnet': 'EfficientNet-V2', 'resnet': 'ResNet50', 'deit': 'DeiT-Small'}
     fig.text(0.5, 0.35, f"{name_map.get(best_model, best_model).upper()}", fontsize=20, ha='center', fontweight='bold', color='#2E7D32')
     fig.text(0.5, 0.32, f"Accuracy: {best_acc:.2f}%", fontsize=16, ha='center', color='#2E7D32')
 
@@ -107,7 +284,8 @@ def create_executive_summary(pdf, metrics):
     best_acc = metrics[best_model]['accuracy'] * 100
     best_model_name = {'vit': 'Vision Transformer (ViT-B/16)', 
                        'effnet': 'EfficientNet-V2', 
-                       'resnet': 'ResNet50'}.get(best_model, best_model)
+                       'resnet': 'ResNet50',
+                       'deit': 'Data-efficient Image Transformer (DeiT)'}.get(best_model, best_model)
     
     vit_acc = metrics.get('vit', {}).get('accuracy', 0) * 100
     cnn_acc = max(metrics.get('resnet', {}).get('accuracy', 0), metrics.get('effnet', {}).get('accuracy', 0)) * 100
@@ -143,12 +321,12 @@ def create_comparison_charts(pdf, metrics):
     fig, axes = plt.subplots(2, 2, figsize=(11, 8.5))
     fig.suptitle('Model Performance Comparison', fontsize=18, fontweight='bold', y=0.95, color='#1a237e')
     
-    models = ['resnet', 'effnet', 'vit']
+    models = ['resnet', 'effnet', 'vit', 'deit']
     # Filter to only existing models
     models = [m for m in models if m in metrics]
     
-    display_names = {'resnet': 'ResNet50', 'effnet': 'EffNet-V2', 'vit': 'ViT-B/16'}
-    colors = ['#90CAF9', '#FFCC80', '#A5D6A7'] # Blue, Orange, Green
+    display_names = {'resnet': 'ResNet50', 'effnet': 'EffNet-V2', 'vit': 'ViT-B/16', 'deit': 'DeiT-Small'}
+    colors = ['#90CAF9', '#FFCC80', '#A5D6A7', '#CE93D8'] # Blue, Orange, Green, Purple
     
     names = [display_names[m] for m in models]
     
@@ -211,7 +389,7 @@ def create_detailed_table(pdf, metrics):
     ax = fig.add_subplot(111)
     ax.axis('off')
     
-    models = ['resnet', 'effnet', 'vit']
+    models = ['resnet', 'effnet', 'vit', 'deit']
     models = [m for m in models if m in metrics]
     col_labels = ['Metric'] + [m.upper().replace('NET', 'Net') for m in models]
     
@@ -267,8 +445,9 @@ def embed_images(pdf, metrics):
     # Map model keys to their file prefixes and nice names
     configs = [
         ('vit', 'vit_confusion_matrix.png', 'ViT-B/16', OUTPUT_DIR / "metrics" / "vit_evaluation"),
-        ('effnet', 'effnet_confusion_matrix.png', 'EfficientNet-V2', OUTPUT_DIR / "metrics" / "cnn_evaluation"),
-        ('resnet', 'resnet_confusion_matrix.png', 'ResNet50', OUTPUT_DIR / "metrics" / "cnn_evaluation"),
+        ('effnet', 'effnet_confusion_matrix.png', 'EfficientNet-V2', OUTPUT_DIR),
+        ('resnet', 'resnet_confusion_matrix.png', 'ResNet50', OUTPUT_DIR),
+        ('deit', 'deit_confusion_matrix.png', 'DeiT-Small', OUTPUT_DIR),
     ]
     
     # Confusion Matrices Page
@@ -280,7 +459,7 @@ def embed_images(pdf, metrics):
         
         path = dir_path / filename
         if path.exists():
-            ax = fig.add_subplot(1, 3, i+1)
+            ax = fig.add_subplot(2, 2, i+1)
             img = plt.imread(str(path))
             ax.imshow(img)
             ax.axis('off')
@@ -296,8 +475,9 @@ def embed_images(pdf, metrics):
     
     roc_configs = [
         ('vit', 'vit_roc_curves.png', 'ViT-B/16', OUTPUT_DIR / "metrics" / "vit_evaluation"),
-        ('effnet', 'effnet_roc_curves.png', 'EfficientNet-V2', OUTPUT_DIR / "metrics" / "cnn_evaluation"),
-        ('resnet', 'resnet_roc_curves.png', 'ResNet50', OUTPUT_DIR / "metrics" / "cnn_evaluation"),
+        ('effnet', 'effnet_roc_curves.png', 'EfficientNet-V2', OUTPUT_DIR),
+        ('resnet', 'resnet_roc_curves.png', 'ResNet50', OUTPUT_DIR),
+        ('deit', 'deit_roc_curves.png', 'DeiT-Small', OUTPUT_DIR),
     ]
 
     for i, (model_key, filename, pretty_name, dir_path) in enumerate(roc_configs):
@@ -305,7 +485,7 @@ def embed_images(pdf, metrics):
         
         path = dir_path / filename
         if path.exists():
-            ax = fig.add_subplot(1, 3, i+1)
+            ax = fig.add_subplot(2, 2, i+1)
             img = plt.imread(str(path))
             ax.imshow(img)
             ax.axis('off')

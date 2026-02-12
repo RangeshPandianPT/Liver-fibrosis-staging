@@ -18,7 +18,9 @@ from tqdm import tqdm
 import sys
 
 # Add src to path to import model definitions if needed
-sys.path.insert(0, str(Path(__file__).parent))
+# Add src to path to import model definitions if needed
+# Fix path: src/inference -> project_root
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Configuration
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

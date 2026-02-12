@@ -1,20 +1,20 @@
 Ensemble Performance Report
 ===========================
-Accuracy: 0.9439
-QWK Score: 0.9683
-F1 Macro: 0.9217
-Precision Macro: 0.9258
-Recall Macro: 0.9263
+Accuracy: 0.9826
+QWK Score: 0.9938
+F1 Macro: 0.9752
+Precision Macro: 0.9748
+Recall Macro: 0.9765
 
 Classification Report:
               precision    recall  f1-score   support
 
           F0       1.00      1.00      1.00       423
-          F1       0.87      0.95      0.91       172
-          F2       0.80      0.96      0.87       159
-          F3       0.98      0.77      0.86       171
-          F4       0.99      0.95      0.97       340
+          F1       0.98      0.96      0.97       172
+          F2       0.91      0.99      0.95       159
+          F3       0.99      0.95      0.97       171
+          F4       1.00      0.99      0.99       340
 
-    accuracy                           0.94      1265
-   macro avg       0.93      0.93      0.92      1265
-weighted avg       0.95      0.94      0.94      1265
+    accuracy                           0.98      1265
+   macro avg       0.97      0.98      0.98      1265
+weighted avg       0.98      0.98      0.98      1265
