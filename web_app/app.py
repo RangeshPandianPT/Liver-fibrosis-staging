@@ -9,8 +9,11 @@ import sys
 import timm
 
 # Add project root to path
-BASE_DIR = Path(__file__).parent
-sys.path.insert(0, str(BASE_DIR))
+import os
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+BASE_DIR = PROJECT_ROOT
 
 # Import project modules
 from config import DEVICE, NUM_CLASSES, CLASS_NAMES, CLAHE_CLIP_LIMIT, CLAHE_TILE_GRID_SIZE
