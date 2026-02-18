@@ -37,7 +37,8 @@ ENSEMBLE_WEIGHTS = {
     'efficientnet': 1.0,
     'vit': 1.0,
     'deit': 1.0,
-    'mednext': 1.0
+    'mednext': 1.0,
+    'convnextv2': 1.0
 }
 
 # Training settings

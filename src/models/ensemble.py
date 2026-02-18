@@ -14,6 +14,7 @@ from src.models.efficientnet_branch import EfficientNetBranch
 from src.models.vit_branch import ViTBranch
 from src.models.deit_branch import DeiTBranch
 from src.models.mednext_branch import MedNeXtBranch
+from src.models.convnextv2_branch import ConvNeXtV2Branch
 
 
 class SoftVotingEnsemble(nn.Module):
@@ -45,6 +46,7 @@ class SoftVotingEnsemble(nn.Module):
         self.vit = ViTBranch(num_classes=num_classes, pretrained=pretrained)
         self.deit = DeiTBranch(num_classes=num_classes, pretrained=pretrained)
         self.mednext = MedNeXtBranch(num_classes=num_classes, pretrained=pretrained)
+        self.convnextv2 = ConvNeXtV2Branch(num_classes=num_classes, pretrained=pretrained)
         
         # Set ensemble weights
         if weights is None:
@@ -60,6 +62,7 @@ class SoftVotingEnsemble(nn.Module):
         self.register_buffer('w_vit', torch.tensor(self.weights['vit']))
         self.register_buffer('w_deit', torch.tensor(self.weights['deit']))
         self.register_buffer('w_mednext', torch.tensor(self.weights['mednext']))
+        self.register_buffer('w_convnextv2', torch.tensor(self.weights['convnextv2']))
     
     def forward(self, x: torch.Tensor, return_individual: bool = False):
         """
@@ -81,6 +84,7 @@ class SoftVotingEnsemble(nn.Module):
         logits_vit = self.vit(x)
         logits_deit = self.deit(x)
         logits_mednext = self.mednext(x)
+        logits_convnextv2 = self.convnextv2(x)
         
         # Convert to probabilities (softmax)
         probs_resnet = F.softmax(logits_resnet, dim=1)
@@ -88,6 +92,7 @@ class SoftVotingEnsemble(nn.Module):
         probs_vit = F.softmax(logits_vit, dim=1)
         probs_deit = F.softmax(logits_deit, dim=1)
         probs_mednext = F.softmax(logits_mednext, dim=1)
+        probs_convnextv2 = F.softmax(logits_convnextv2, dim=1)
         
         # Weighted average of probabilities (soft voting)
         combined_probs = (
@@ -95,7 +100,8 @@ class SoftVotingEnsemble(nn.Module):
             self.w_efficientnet * probs_efficientnet +
             self.w_vit * probs_vit +
             self.w_deit * probs_deit +
-            self.w_mednext * probs_mednext
+            self.w_mednext * probs_mednext +
+            self.w_convnextv2 * probs_convnextv2
         )
         
         # Convert back to logits for loss computation
@@ -108,7 +114,8 @@ class SoftVotingEnsemble(nn.Module):
                 'efficientnet': logits_efficientnet,
                 'vit': logits_vit,
                 'deit': logits_deit,
-                'mednext': logits_mednext
+                'mednext': logits_mednext,
+                'convnextv2': logits_convnextv2
             }
             return combined_logits, individual
         
@@ -142,7 +149,8 @@ class SoftVotingEnsemble(nn.Module):
             'efficientnet': self.efficientnet,
             'vit': self.vit,
             'deit': self.deit,
-            'mednext': self.mednext
+            'mednext': self.mednext,
+            'convnextv2': self.convnextv2
         }
         if name not in branches:
             raise ValueError(f"Unknown branch: {name}. Choose from {list(branches.keys())}")
@@ -160,7 +168,8 @@ class SoftVotingEnsemble(nn.Module):
             'efficientnet': self.efficientnet.get_target_layer(),
             'vit': self.vit.get_target_layer(),
             'deit': self.deit.get_target_layer(),
-            'mednext': self.mednext.get_target_layer()
+            'mednext': self.mednext.get_target_layer(),
+            'convnextv2': self.convnextv2.get_target_layer()
         }
     
     def freeze_branches(self, branch_names: list = None):
@@ -171,7 +180,7 @@ class SoftVotingEnsemble(nn.Module):
             branch_names: List of branch names to freeze. If None, freeze all.
         """
         if branch_names is None:
-            branch_names = ['resnet50', 'efficientnet', 'vit', 'deit', 'mednext']
+            branch_names = ['resnet50', 'efficientnet', 'vit', 'deit', 'mednext', 'convnextv2']
         
         for name in branch_names:
             branch = self.get_model_branch(name)
