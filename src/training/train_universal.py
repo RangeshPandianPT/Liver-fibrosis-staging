@@ -50,6 +50,8 @@ def get_model(model_name, num_classes, pretrained=True):
         model.classifier = nn.Linear(model.classifier.in_features, num_classes)
     elif model_name == 'vit':
         model = timm.create_model('vit_base_patch16_224', pretrained=pretrained, num_classes=num_classes)
+    elif model_name == 'mednext':
+        model = timm.create_model('convnext_tiny', pretrained=pretrained, num_classes=num_classes)
     else:
         raise ValueError(f"Unknown model name: {model_name}")
         
@@ -202,7 +204,7 @@ def validate(model, loader, criterion, device):
 
 def main():
     parser = argparse.ArgumentParser(description='Universal Training Script')
-    parser.add_argument('--model', type=str, required=True, choices=['convnext', 'resnet', 'efficientnet', 'densenet', 'vit'],
+    parser.add_argument('--model', type=str, required=True, choices=['convnext', 'resnet', 'efficientnet', 'densenet', 'vit', 'mednext'],
                         help='Model architecture to train')
     parser.add_argument('--epochs', type=int, default=NUM_EPOCHS, help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=BATCH_SIZE, help='Batch size')

@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 import timm
+import sys
+sys.path.insert(0, str(__file__).rsplit('src', 1)[0])
+from config import IMAGE_SIZE
 
 class DeiTBranch(nn.Module):
     """
@@ -12,7 +15,7 @@ class DeiTBranch(nn.Module):
         # Load from timm
         # 'deit_small_patch16_224' or 'deit_small_distilled_patch16_224'
         # We switch to the distilled version for better performance with a teacher
-        self.model = timm.create_model('deit_small_distilled_patch16_224', pretrained=pretrained)
+        self.model = timm.create_model('deit_small_distilled_patch16_224', pretrained=pretrained, img_size=IMAGE_SIZE)
         
         # Replace head
         # timm models usually have a 'head' attribute (or 'fc' or 'classifier')

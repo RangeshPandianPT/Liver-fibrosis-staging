@@ -13,6 +13,7 @@ from src.models.resnet_branch import ResNet50Branch
 from src.models.efficientnet_branch import EfficientNetBranch
 from src.models.vit_branch import ViTBranch
 from src.models.deit_branch import DeiTBranch
+from src.models.mednext_branch import MedNeXtBranch
 
 
 class SoftVotingEnsemble(nn.Module):
@@ -43,6 +44,7 @@ class SoftVotingEnsemble(nn.Module):
         self.efficientnet = EfficientNetBranch(num_classes=num_classes, pretrained=pretrained)
         self.vit = ViTBranch(num_classes=num_classes, pretrained=pretrained)
         self.deit = DeiTBranch(num_classes=num_classes, pretrained=pretrained)
+        self.mednext = MedNeXtBranch(num_classes=num_classes, pretrained=pretrained)
         
         # Set ensemble weights
         if weights is None:
@@ -57,6 +59,7 @@ class SoftVotingEnsemble(nn.Module):
         self.register_buffer('w_efficientnet', torch.tensor(self.weights['efficientnet']))
         self.register_buffer('w_vit', torch.tensor(self.weights['vit']))
         self.register_buffer('w_deit', torch.tensor(self.weights['deit']))
+        self.register_buffer('w_mednext', torch.tensor(self.weights['mednext']))
     
     def forward(self, x: torch.Tensor, return_individual: bool = False):
         """
@@ -77,19 +80,22 @@ class SoftVotingEnsemble(nn.Module):
         logits_efficientnet = self.efficientnet(x)
         logits_vit = self.vit(x)
         logits_deit = self.deit(x)
+        logits_mednext = self.mednext(x)
         
         # Convert to probabilities (softmax)
         probs_resnet = F.softmax(logits_resnet, dim=1)
         probs_efficientnet = F.softmax(logits_efficientnet, dim=1)
         probs_vit = F.softmax(logits_vit, dim=1)
         probs_deit = F.softmax(logits_deit, dim=1)
+        probs_mednext = F.softmax(logits_mednext, dim=1)
         
         # Weighted average of probabilities (soft voting)
         combined_probs = (
             self.w_resnet * probs_resnet +
             self.w_efficientnet * probs_efficientnet +
             self.w_vit * probs_vit +
-            self.w_deit * probs_deit
+            self.w_deit * probs_deit +
+            self.w_mednext * probs_mednext
         )
         
         # Convert back to logits for loss computation
@@ -101,7 +107,8 @@ class SoftVotingEnsemble(nn.Module):
                 'resnet50': logits_resnet,
                 'efficientnet': logits_efficientnet,
                 'vit': logits_vit,
-                'deit': logits_deit
+                'deit': logits_deit,
+                'mednext': logits_mednext
             }
             return combined_logits, individual
         
@@ -134,7 +141,8 @@ class SoftVotingEnsemble(nn.Module):
             'resnet50': self.resnet,
             'efficientnet': self.efficientnet,
             'vit': self.vit,
-            'deit': self.deit
+            'deit': self.deit,
+            'mednext': self.mednext
         }
         if name not in branches:
             raise ValueError(f"Unknown branch: {name}. Choose from {list(branches.keys())}")
@@ -151,7 +159,8 @@ class SoftVotingEnsemble(nn.Module):
             'resnet50': self.resnet.get_target_layer(),
             'efficientnet': self.efficientnet.get_target_layer(),
             'vit': self.vit.get_target_layer(),
-            'deit': self.deit.get_target_layer()
+            'deit': self.deit.get_target_layer(),
+            'mednext': self.mednext.get_target_layer()
         }
     
     def freeze_branches(self, branch_names: list = None):
@@ -162,7 +171,7 @@ class SoftVotingEnsemble(nn.Module):
             branch_names: List of branch names to freeze. If None, freeze all.
         """
         if branch_names is None:
-            branch_names = ['resnet50', 'efficientnet', 'vit', 'deit']
+            branch_names = ['resnet50', 'efficientnet', 'vit', 'deit', 'mednext']
         
         for name in branch_names:
             branch = self.get_model_branch(name)
