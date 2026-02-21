@@ -31,12 +31,12 @@ CLAHE_TILE_GRID_SIZE = (8, 8)
 PRETRAINED = True
 FREEZE_BACKBONE = False
 
-# Ensemble weights (equal by default)
+# Ensemble weights (ConvNeXt V2 slightly favoured)
 ENSEMBLE_WEIGHTS = {
-    'resnet50': 1.0,
-    'efficientnet': 1.0,
-    'vit': 1.0,
-    'deit': 1.0
+    'convnextv2': 1.2,
+    'mednext': 1.1,
+    'deit': 1.0,
+    'resnet': 1.0,
 }
 
 # Training settings
