@@ -50,6 +50,10 @@ def get_model(model_name, num_classes, pretrained=True):
         model.classifier = nn.Linear(model.classifier.in_features, num_classes)
     elif model_name == 'vit':
         model = timm.create_model('vit_base_patch16_224', pretrained=pretrained, num_classes=num_classes)
+    elif model_name == 'mednext':
+        model = timm.create_model('convnext_tiny', pretrained=pretrained, num_classes=num_classes)
+    elif model_name == 'convnextv2':
+        model = timm.create_model('convnextv2_tiny', pretrained=pretrained, num_classes=num_classes)
     else:
         raise ValueError(f"Unknown model name: {model_name}")
         
@@ -202,11 +206,13 @@ def validate(model, loader, criterion, device):
 
 def main():
     parser = argparse.ArgumentParser(description='Universal Training Script')
-    parser.add_argument('--model', type=str, required=True, choices=['convnext', 'resnet', 'efficientnet', 'densenet', 'vit'],
+    parser.add_argument('--model', type=str, required=True, choices=['convnext', 'resnet', 'efficientnet', 'densenet', 'vit', 'mednext', 'convnextv2'],
                         help='Model architecture to train')
     parser.add_argument('--epochs', type=int, default=NUM_EPOCHS, help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=BATCH_SIZE, help='Batch size')
     parser.add_argument('--lr', type=float, default=LEARNING_RATE, help='Learning rate')
+    parser.add_argument('--resume', action='store_true', help='Resume training from last checkpoint')
+    parser.add_argument('--start_epoch', type=int, default=0, help='Epoch to start from (used with --resume)')
     
     args = parser.parse_args()
     
@@ -232,9 +238,32 @@ def main():
     
     # Training Loop
     best_acc = 0.0
+    start_epoch = 0
     
-    print("\nStarting Training...")
-    for epoch in range(args.epochs):
+    # Resume from checkpoint if requested
+    checkpoint_path = model_output_dir / f"checkpoint_{args.model}.pth"
+    if args.resume and checkpoint_path.exists():
+        print(f"\nResuming from checkpoint: {checkpoint_path}")
+        checkpoint = torch.load(str(checkpoint_path), map_location=DEVICE, weights_only=False)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        best_acc = checkpoint['best_acc']
+        print(f"  Resumed at epoch {start_epoch + 1}, best acc so far: {best_acc:.2f}%")
+    elif args.resume:
+        # No checkpoint file, but try loading the best model weights
+        best_model_path = model_output_dir / f"best_{args.model}_model.pth"
+        if best_model_path.exists():
+            print(f"\nNo checkpoint found. Loading best model weights: {best_model_path}")
+            model.load_state_dict(torch.load(str(best_model_path), map_location=DEVICE, weights_only=True))
+            start_epoch = args.start_epoch
+            print(f"  Starting from epoch {start_epoch + 1} with loaded weights")
+        else:
+            print("\nNo checkpoint or best model found. Starting from scratch.")
+    
+    print(f"\nStarting Training from epoch {start_epoch + 1} to {args.epochs}...")
+    for epoch in range(start_epoch, args.epochs):
         start_time = time.time()
         
         train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, DEVICE)
@@ -252,6 +281,17 @@ def main():
             save_path = model_output_dir / f"best_{args.model}_model.pth"
             torch.save(model.state_dict(), save_path)
             print(f"  >>> New Best Model Saved! ({val_acc:.2f}%)")
+        
+        # Save checkpoint after every epoch for resumption
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'best_acc': best_acc,
+            'train_loss': train_loss,
+            'val_loss': val_loss,
+        }, checkpoint_path)
             
     print(f"\nTraining Complete. Best Accuracy: {best_acc:.2f}%")
 

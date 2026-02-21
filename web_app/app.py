@@ -20,12 +20,10 @@ from config import DEVICE, NUM_CLASSES, CLASS_NAMES, CLAHE_CLIP_LIMIT, CLAHE_TIL
 
 # --- CONFIGURATION ---
 MODEL_ACCURACIES = {
-    'Ensemble (All Models)': '98.26%',
+    'Ensemble (All Models)': '99.05%',
+    'ConvNeXt V2': '99.05%',
+    'MedNeXt (ConvNeXt-Tiny)': '98.66%',
     'ConvNeXt (Best Individual)': '98.42%',
-    'Vision Transformer (ViT-B/16)': '97.47%',
-    'EfficientNet-V2': '96.60%',
-    'ResNet50': '91.30%',
-    'DeiT-Small': '85.53%'
 }
 
 # --- PAGE SETUP ---
@@ -95,6 +93,12 @@ def load_model(model_name):
         elif model_name == 'deit':
             model = timm.create_model('deit_small_patch16_224', pretrained=False, num_classes=NUM_CLASSES)
             ckpt_path = BASE_DIR / "outputs" / "deit_small" / "best_deit_model.pth"
+        elif model_name == 'mednext':
+            model = timm.create_model('convnext_tiny', pretrained=False, num_classes=NUM_CLASSES)
+            ckpt_path = BASE_DIR / "outputs" / "mednext" / "best_mednext_model.pth"
+        elif model_name == 'convnextv2':
+            model = timm.create_model('convnextv2_tiny', pretrained=False, num_classes=NUM_CLASSES)
+            ckpt_path = BASE_DIR / "outputs" / "convnextv2" / "best_convnextv2_model.pth"
         else:
             return None
         
@@ -117,11 +121,9 @@ def load_model(model_name):
 def get_ensemble_prediction(image_tensor):
     """Get ensemble prediction from all models."""
     weights = {
-        'convnext': 1.1,
-        'vit': 1.2,
-        'efficientnet': 1.0,
-        'resnet': 0.8,
-        'deit': 1.0
+        'convnextv2': 1.2,
+        'mednext': 1.1,
+        'convnext': 1.0,
     }
     
     all_probs = []
@@ -145,11 +147,9 @@ def get_prediction(image_tensor, model_choice):
         return get_ensemble_prediction(image_tensor)
     
     model_map = {
+        'ConvNeXt V2': 'convnextv2',
+        'MedNeXt (ConvNeXt-Tiny)': 'mednext',
         'ConvNeXt (Best Individual)': 'convnext',
-        'Vision Transformer (ViT-B/16)': 'vit',
-        'EfficientNet-V2': 'efficientnet',
-        'ResNet50': 'resnet',
-        'DeiT-Small': 'deit'
     }
     
     model_name = model_map.get(model_choice)

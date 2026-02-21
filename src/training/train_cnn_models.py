@@ -24,7 +24,10 @@ from PIL import Image
 from tqdm import tqdm
 
 import sys
-sys.path.insert(0, str(Path(__file__).parent))
+# Fix path: src/training -> project_root
+project_root = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(project_root))
+print(f"Added project root to path: {project_root}")
 
 from config import (
     DEVICE, BATCH_SIZE, NUM_EPOCHS, OUTPUT_DIR, CHECKPOINT_DIR,
@@ -35,6 +38,11 @@ from src.preprocessing import get_train_transforms, get_val_transforms
 from src.models.resnet_branch import ResNet50Branch
 from src.models.efficientnet_branch import EfficientNetBranch
 from src.training import LabelSmoothingCrossEntropy
+try:
+    from compute_class_weights import compute_weights
+except ImportError:
+    # Fallback if running from root with module structure
+    from src.training.compute_class_weights import compute_weights
 
 
 class ManifestDataset(Dataset):
@@ -127,7 +135,7 @@ def validate_epoch(model, val_loader, criterion, device, epoch):
     return running_loss / len(val_loader), 100. * correct / total
 
 
-def train_model(model, model_name, train_loader, val_loader, args, device, start_epoch=0):
+def train_model(model, model_name, train_loader, val_loader, args, device, start_epoch=0, class_weights=None):
     """
     Train a single model and return training history.
     
@@ -139,14 +147,19 @@ def train_model(model, model_name, train_loader, val_loader, args, device, start
         args: Command line arguments
         device: Device to use
         start_epoch: Starting epoch (for resume)
+        class_weights: Optional tensor of class weights for loss function
         
     Returns:
         dict: Training history with loss/accuracy per epoch
     """
     model = model.to(device)
     
-    # Loss function
-    criterion = LabelSmoothingCrossEntropy(smoothing=LABEL_SMOOTHING)
+    # Loss function with optional class weights
+    if class_weights is not None:
+        class_weights = class_weights.to(device)
+        print("Using weighted LabelSmoothingCrossEntropy")
+    
+    criterion = LabelSmoothingCrossEntropy(smoothing=LABEL_SMOOTHING, weight=class_weights)
     
     # Optimizer
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=WEIGHT_DECAY)
@@ -267,6 +280,17 @@ def main():
         num_workers=args.num_workers, pin_memory=True
     )
     
+    # Compute class weights
+    print("\nComputing class weights for balanced training...")
+    try:
+        weights_dict = compute_weights()
+        class_weights = torch.tensor([weights_dict[c] for c in CLASS_NAMES], dtype=torch.float)
+        print(f"Class weights tensor: {class_weights}")
+    except Exception as e:
+        print(f"Error computing class weights: {e}")
+        print("Falling back to unweighted loss.")
+        class_weights = None
+    
     # Training history for all models
     all_history = {}
     
@@ -274,14 +298,14 @@ def main():
     if args.model in ['resnet', 'both']:
         resnet = ResNet50Branch(pretrained=True)
         all_history['resnet'] = train_model(
-            resnet, 'resnet', train_loader, val_loader, args, DEVICE
+            resnet, 'resnet', train_loader, val_loader, args, DEVICE, class_weights=class_weights
         )
     
     # Train EfficientNet-V2
     if args.model in ['effnet', 'both']:
         effnet = EfficientNetBranch(pretrained=True)
         all_history['effnet'] = train_model(
-            effnet, 'effnet', train_loader, val_loader, args, DEVICE
+            effnet, 'effnet', train_loader, val_loader, args, DEVICE, class_weights=class_weights
         )
     
     # Save training history

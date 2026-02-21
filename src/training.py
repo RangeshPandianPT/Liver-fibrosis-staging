@@ -28,18 +28,20 @@ class LabelSmoothingCrossEntropy(nn.Module):
     (e.g., F1 vs F2) by preventing the model from becoming overly confident.
     """
     
-    def __init__(self, smoothing: float = LABEL_SMOOTHING, num_classes: int = 5):
+    def __init__(self, smoothing: float = LABEL_SMOOTHING, num_classes: int = 5, weight: Optional[torch.Tensor] = None):
         """
         Initialize the loss function.
         
         Args:
             smoothing: Label smoothing factor (0.0 = no smoothing, 1.0 = uniform)
             num_classes: Number of classes
+            weight: Optional class weights tensor of shape (num_classes,)
         """
         super().__init__()
         self.smoothing = smoothing
         self.num_classes = num_classes
         self.confidence = 1.0 - smoothing
+        self.weight = weight
     
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """
@@ -61,9 +63,18 @@ class LabelSmoothingCrossEntropy(nn.Module):
             smooth_labels.scatter_(1, target.unsqueeze(1), self.confidence)
         
         # Compute loss
-        loss = (-smooth_labels * log_probs).sum(dim=-1).mean()
+        loss = (-smooth_labels * log_probs).sum(dim=-1)
         
-        return loss
+        # Apply class weights if provided
+        if self.weight is not None:
+            # Get weight for each sample based on target class
+            # Note: For smoothed labels, we could weight based on target, 
+            # or weighted sum. Standard practice with smoothing + weights 
+            # is often to just weight by the hard target.
+            sample_weights = self.weight.to(pred.device)[target]
+            loss = loss * sample_weights
+            
+        return loss.mean()
 
 
 def create_optimizer(model: nn.Module, 
