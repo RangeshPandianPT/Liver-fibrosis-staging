@@ -1,5 +1,6 @@
 """
-Soft-Voting Ensemble combining ResNet50, EfficientNet-V2, and ViT.
+Soft-Voting Ensemble combining ResNet50, EfficientNet-V2, ViT, DeiT,
+MedNeXt, ConvNeXtV2, and DenseNet121.
 """
 import torch
 import torch.nn as nn
@@ -15,14 +16,16 @@ from src.models.vit_branch import ViTBranch
 from src.models.deit_branch import DeiTBranch
 from src.models.mednext_branch import MedNeXtBranch
 from src.models.convnextv2_branch import ConvNeXtV2Branch
+from src.models.densenet_branch import DenseNetBranch
 
 
 class SoftVotingEnsemble(nn.Module):
     """
-    Soft-Voting Ensemble that merges softmax outputs of three model branches.
-    
+    Soft-Voting Ensemble that merges softmax outputs of all model branches.
+
     The ensemble computes a weighted average of the softmax probabilities
-    from ResNet50, EfficientNet-V2, Vision Transformer, and DeiT models.
+    from ResNet50, EfficientNet-V2, ViT, DeiT, MedNeXt, ConvNeXtV2,
+    and DenseNet121.
     """
     
     def __init__(self,
@@ -47,22 +50,24 @@ class SoftVotingEnsemble(nn.Module):
         self.deit = DeiTBranch(num_classes=num_classes, pretrained=pretrained)
         self.mednext = MedNeXtBranch(num_classes=num_classes, pretrained=pretrained)
         self.convnextv2 = ConvNeXtV2Branch(num_classes=num_classes, pretrained=pretrained)
-        
+        self.densenet = DenseNetBranch(num_classes=num_classes, pretrained=pretrained)
+
         # Set ensemble weights
         if weights is None:
             weights = ENSEMBLE_WEIGHTS
-        
+
         # Normalize weights
         total = sum(weights.values())
         self.weights = {k: v / total for k, v in weights.items()}
-        
+
         # Store as buffers for save/load
-        self.register_buffer('w_resnet', torch.tensor(self.weights['resnet50']))
+        self.register_buffer('w_resnet',      torch.tensor(self.weights['resnet50']))
         self.register_buffer('w_efficientnet', torch.tensor(self.weights['efficientnet']))
-        self.register_buffer('w_vit', torch.tensor(self.weights['vit']))
-        self.register_buffer('w_deit', torch.tensor(self.weights['deit']))
-        self.register_buffer('w_mednext', torch.tensor(self.weights['mednext']))
-        self.register_buffer('w_convnextv2', torch.tensor(self.weights['convnextv2']))
+        self.register_buffer('w_vit',         torch.tensor(self.weights['vit']))
+        self.register_buffer('w_deit',        torch.tensor(self.weights['deit']))
+        self.register_buffer('w_mednext',     torch.tensor(self.weights['mednext']))
+        self.register_buffer('w_convnextv2',  torch.tensor(self.weights['convnextv2']))
+        self.register_buffer('w_densenet',    torch.tensor(self.weights['densenet']))
     
     def forward(self, x: torch.Tensor, return_individual: bool = False):
         """
@@ -79,46 +84,50 @@ class SoftVotingEnsemble(nn.Module):
                 Tuple of (combined_logits, dict of individual logits)
         """
         # Get logits from each branch
-        logits_resnet = self.resnet(x)
+        logits_resnet       = self.resnet(x)
         logits_efficientnet = self.efficientnet(x)
-        logits_vit = self.vit(x)
-        logits_deit = self.deit(x)
-        logits_mednext = self.mednext(x)
-        logits_convnextv2 = self.convnextv2(x)
-        
+        logits_vit          = self.vit(x)
+        logits_deit         = self.deit(x)
+        logits_mednext      = self.mednext(x)
+        logits_convnextv2   = self.convnextv2(x)
+        logits_densenet     = self.densenet(x)
+
         # Convert to probabilities (softmax)
-        probs_resnet = F.softmax(logits_resnet, dim=1)
+        probs_resnet       = F.softmax(logits_resnet, dim=1)
         probs_efficientnet = F.softmax(logits_efficientnet, dim=1)
-        probs_vit = F.softmax(logits_vit, dim=1)
-        probs_deit = F.softmax(logits_deit, dim=1)
-        probs_mednext = F.softmax(logits_mednext, dim=1)
-        probs_convnextv2 = F.softmax(logits_convnextv2, dim=1)
-        
+        probs_vit          = F.softmax(logits_vit, dim=1)
+        probs_deit         = F.softmax(logits_deit, dim=1)
+        probs_mednext      = F.softmax(logits_mednext, dim=1)
+        probs_convnextv2   = F.softmax(logits_convnextv2, dim=1)
+        probs_densenet     = F.softmax(logits_densenet, dim=1)
+
         # Weighted average of probabilities (soft voting)
         combined_probs = (
-            self.w_resnet * probs_resnet +
+            self.w_resnet      * probs_resnet +
             self.w_efficientnet * probs_efficientnet +
-            self.w_vit * probs_vit +
-            self.w_deit * probs_deit +
-            self.w_mednext * probs_mednext +
-            self.w_convnextv2 * probs_convnextv2
+            self.w_vit         * probs_vit +
+            self.w_deit        * probs_deit +
+            self.w_mednext     * probs_mednext +
+            self.w_convnextv2  * probs_convnextv2 +
+            self.w_densenet    * probs_densenet
         )
-        
+
         # Convert back to logits for loss computation
         # Adding small epsilon to avoid log(0)
         combined_logits = torch.log(combined_probs + 1e-10)
-        
+
         if return_individual:
             individual = {
-                'resnet50': logits_resnet,
+                'resnet50':    logits_resnet,
                 'efficientnet': logits_efficientnet,
-                'vit': logits_vit,
-                'deit': logits_deit,
-                'mednext': logits_mednext,
-                'convnextv2': logits_convnextv2
+                'vit':         logits_vit,
+                'deit':        logits_deit,
+                'mednext':     logits_mednext,
+                'convnextv2':  logits_convnextv2,
+                'densenet':    logits_densenet,
             }
             return combined_logits, individual
-        
+
         return combined_logits
     
     def get_probabilities(self, x: torch.Tensor) -> torch.Tensor:
@@ -145,12 +154,13 @@ class SoftVotingEnsemble(nn.Module):
             The corresponding model branch
         """
         branches = {
-            'resnet50': self.resnet,
+            'resnet50':    self.resnet,
             'efficientnet': self.efficientnet,
-            'vit': self.vit,
-            'deit': self.deit,
-            'mednext': self.mednext,
-            'convnextv2': self.convnextv2
+            'vit':         self.vit,
+            'deit':        self.deit,
+            'mednext':     self.mednext,
+            'convnextv2':  self.convnextv2,
+            'densenet':    self.densenet,
         }
         if name not in branches:
             raise ValueError(f"Unknown branch: {name}. Choose from {list(branches.keys())}")
@@ -164,12 +174,13 @@ class SoftVotingEnsemble(nn.Module):
             Dictionary mapping branch names to their target layers
         """
         return {
-            'resnet50': self.resnet.get_target_layer(),
+            'resnet50':    self.resnet.get_target_layer(),
             'efficientnet': self.efficientnet.get_target_layer(),
-            'vit': self.vit.get_target_layer(),
-            'deit': self.deit.get_target_layer(),
-            'mednext': self.mednext.get_target_layer(),
-            'convnextv2': self.convnextv2.get_target_layer()
+            'vit':         self.vit.get_target_layer(),
+            'deit':        self.deit.get_target_layer(),
+            'mednext':     self.mednext.get_target_layer(),
+            'convnextv2':  self.convnextv2.get_target_layer(),
+            'densenet':    self.densenet.get_target_layer(),
         }
     
     def freeze_branches(self, branch_names: list = None):
@@ -180,7 +191,7 @@ class SoftVotingEnsemble(nn.Module):
             branch_names: List of branch names to freeze. If None, freeze all.
         """
         if branch_names is None:
-            branch_names = ['resnet50', 'efficientnet', 'vit', 'deit', 'mednext', 'convnextv2']
+            branch_names = ['resnet50', 'efficientnet', 'vit', 'deit', 'mednext', 'convnextv2', 'densenet']
         
         for name in branch_names:
             branch = self.get_model_branch(name)
