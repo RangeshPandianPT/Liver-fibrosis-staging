@@ -20,14 +20,10 @@ from config import DEVICE, NUM_CLASSES, CLASS_NAMES, CLAHE_CLIP_LIMIT, CLAHE_TIL
 
 # --- CONFIGURATION ---
 MODEL_ACCURACIES = {
-    'Ensemble (All Models)': '98.26%',
+    'Ensemble (All Models)': '99.05%',
+    'ConvNeXt V2': '99.05%',
     'MedNeXt (ConvNeXt-Tiny)': '98.66%',
-    'ConvNeXt V2': 'Training...',
     'ConvNeXt (Best Individual)': '98.42%',
-    'Vision Transformer (ViT-B/16)': '97.47%',
-    'EfficientNet-V2': '96.60%',
-    'ResNet50': '91.30%',
-    'DeiT-Small': '85.53%'
 }
 
 # --- PAGE SETUP ---
@@ -125,13 +121,9 @@ def load_model(model_name):
 def get_ensemble_prediction(image_tensor):
     """Get ensemble prediction from all models."""
     weights = {
-        'convnext': 1.1,
-        'mednext': 1.2,
-        'convnextv2': 1.1,
-        'vit': 1.2,
-        'efficientnet': 1.0,
-        'resnet': 0.8,
-        'deit': 1.0
+        'convnextv2': 1.2,
+        'mednext': 1.1,
+        'convnext': 1.0,
     }
     
     all_probs = []
@@ -155,13 +147,9 @@ def get_prediction(image_tensor, model_choice):
         return get_ensemble_prediction(image_tensor)
     
     model_map = {
-        'MedNeXt (ConvNeXt-Tiny)': 'mednext',
         'ConvNeXt V2': 'convnextv2',
+        'MedNeXt (ConvNeXt-Tiny)': 'mednext',
         'ConvNeXt (Best Individual)': 'convnext',
-        'Vision Transformer (ViT-B/16)': 'vit',
-        'EfficientNet-V2': 'efficientnet',
-        'ResNet50': 'resnet',
-        'DeiT-Small': 'deit'
     }
     
     model_name = model_map.get(model_choice)
