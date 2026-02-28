@@ -1,0 +1,32 @@
+# Model Accuracies - Liver Fibrosis Staging
+# Updated: 2026-02-12
+
+## Individual Models
+ConvNeXt Tiny:          98.42%  (Cohen's Kappa: 0.9793)
+Vision Transformer:     97.47%  (Cohen's Kappa: 0.9600)
+EfficientNet-V2:        96.60%  (Cohen's Kappa: 0.9500)
+ResNet50:               91.30%  (Cohen's Kappa: 0.8900)
+DeiT-Small:             85.53%  (Cohen's Kappa: 0.8200)
+
+## Ensemble Performance
+Weighted Soft Voting:   98.26%  (Quadratic Weighted Kappa: 0.9938)
+
+## Ensemble Weights
+- ConvNeXt:      1.1
+- ViT-B/16:      1.2
+- EfficientNet:  1.0
+- ResNet50:      0.8
+- DeiT:          1.0
+
+## Key Achievements
+✓ Best Individual Model: ConvNeXt at 98.42%
+✓ Robust Ensemble: 98.26% with near-perfect Kappa (0.9938)
+✓ Class Imbalance Solved: WeightedRandomSampler for balanced training
+✓ Production Ready: All models trained and integrated
+
+## Test Set Statistics
+- Total Test Samples: 1,265
+- Classes: F0, F1, F2, F3, F4 (5 fibrosis stages)
+- Macro F1-Score (Ensemble): 0.9752
+- Macro Precision (Ensemble): 0.9748
+- Macro Recall (Ensemble): 0.9765
