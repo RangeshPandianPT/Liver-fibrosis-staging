@@ -184,7 +184,7 @@ class SoftVotingEnsemble(nn.Module):
 
 if __name__ == "__main__":
     # Quick test
-    model = SoftVotingEnsemble()
+    model = SoftVotingEnsemble(pretrained=False)
     x = torch.randn(2, 3, 384, 384)
 
     # Test forward
