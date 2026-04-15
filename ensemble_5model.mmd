@@ -1,0 +1,83 @@
+graph TD
+    %% Styling Definitions
+    classDef data fill:#eef2f5,stroke:#34495e,stroke-width:2px,rx:10px,ry:10px;
+    classDef preproc fill:#fdf8e3,stroke:#d35400,stroke-width:2px,rx:5px,ry:5px;
+    classDef model fill:#e8f4f8,stroke:#2980b9,stroke-width:2px,rx:10px,ry:10px;
+    classDef transformer fill:#eafaf1,stroke:#27ae60,stroke-width:2px,rx:10px,ry:10px;
+    classDef extract fill:#f9ebea,stroke:#c0392b,stroke-width:2px,rx:5px,ry:5px;
+    classDef weight fill:#fff0f5,stroke:#8e44ad,stroke-width:2px,rx:20px,ry:20px;
+    classDef aggregate fill:#fbfcfc,stroke:#2c3e50,stroke-width:3px,rx:50px,ry:50px;
+    classDef output fill:#e9f7ef,stroke:#1e8449,stroke-width:2px,rx:10px,ry:10px;
+
+    %% Data Input
+    subgraph Phase_A [Data Input & Preprocessing]
+        direction TB
+        input[Liver Imaging Scans<br/>Microvascular / Doppler / SWE]:::data
+        preproc[ROI Cropping 200x300, Normalization & Augmentation <br/> Resizing to 224x224x3]:::preproc
+        input --> preproc
+    end
+
+    %% The 5 Ensembled Models
+    subgraph Phase_B [Parallel Deep Learning Ensemble Backbones]
+        direction LR
+        M1[Model 1: ConvNeXt V2<br/>Global Response Normalization]:::model
+        M2[Model 2: ConvNeXt<br/>Depthwise Convolutions]:::model
+        M3[Model 3: MedNeXt<br/>Medical Imaging Architecture]:::model
+        M4[Model 4: DeiT<br/>Vision Transformer Blocks]:::transformer
+        M5[Model 5: ResNet-50<br/>Residual Identity Blocks]:::model
+    end
+
+    preproc --> M1
+    preproc --> M2
+    preproc --> M3
+    preproc --> M4
+    preproc --> M5
+
+    %% Probability Extraction
+    subgraph Phase_C [Independent Probability Extraction]
+        direction LR
+        P1[Global Avg Pool & Softmax<br/>Probability Matrix P1]:::extract
+        P2[Global Avg Pool & Softmax<br/>Probability Matrix P2]:::extract
+        P3[Global Avg Pool & Softmax<br/>Probability Matrix P3]:::extract
+        P4[Global Avg Pool & Softmax<br/>Probability Matrix P4]:::extract
+        P5[Global Avg Pool & Softmax<br/>Probability Matrix P5]:::extract
+    end
+
+    M1 --> P1
+    M2 --> P2
+    M3 --> P3
+    M4 --> P4
+    M5 --> P5
+
+    %% Weighted Soft Voting
+    subgraph Phase_D [Weighted Soft Voting Mechanism]
+        direction TB
+        W1((Weighted<br/> x 1.2 )):::weight
+        W2((Weighted<br/> x 1.1 )):::weight
+        W3((Weighted<br/> x 1.1 )):::weight
+        W4((Weighted<br/> x 1.0 )):::weight
+        W5((Weighted<br/> x 0.8 )):::weight
+        
+        P1 --> W1
+        P2 --> W2
+        P3 --> W3
+        P4 --> W4
+        P5 --> W5
+        
+        Agg((Summation Node<br/>Score = Sum P_i * W_i)):::aggregate
+        W1 --> Agg
+        W2 --> Agg
+        W3 --> Agg
+        W4 --> Agg
+        W5 --> Agg
+    end
+
+    %% Final Staging
+    subgraph Phase_E [Output Assessment]
+        direction TB
+        OutNode[Predicted Liver Fibrosis Stage<br/>ArgMax applied to Aggregated Scores]:::output
+        Classes[Final Classes: F0-1Low, F0-1High, F2, F3, F4]:::output
+        OutNode --> Classes
+    end
+
+    Agg --> OutNode
