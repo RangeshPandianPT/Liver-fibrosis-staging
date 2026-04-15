@@ -1,0 +1,50 @@
+graph TD
+    classDef input fill:#f3e8eb,stroke:#5c4d51,stroke-width:2px,rx:10px,ry:10px;
+    classDef model fill:#e0ebf5,stroke:#3b5998,stroke-width:2px,rx:10px,ry:10px;
+    classDef attention fill:#fff6d9,stroke:#b59a2a,stroke-width:2px,rx:10px,ry:10px;
+    classDef fusion fill:#ffe4e1,stroke:#cd5c5c,stroke-width:2px,rx:10px,ry:10px;
+    classDef dense fill:#f0f0f0,stroke:#666666,stroke-width:2px,rx:10px,ry:10px;
+    classDef output fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,rx:10px,ry:10px;
+
+    I1[Image Scans <br/> e.g., 224x224x3]:::input
+    I2[Clinical Records <br/> Tabular Data]:::input
+
+    M1[Branch A: Image Model 1 <br/> ResNet-50 Backbone]:::model
+    M2[Branch B: Image Model 2 <br/> EfficientNet-B7 Backbone]:::model
+    M3[Branch C: Tabular Model <br/> TabNet Architecture]:::model
+
+    I1 -->|Preprocessed Images| M1
+    I1 -->|Preprocessed Images| M2
+    I2 -->|Normalized Tabular Data| M3
+
+    A1[Multi-Head <br/> Spatial Attention]:::attention
+    A2[Squeeze-and-Excitation <br/> Channel Attention]:::attention
+
+    M1 -->|Feature Maps| A1
+    M2 -->|Feature Maps| A2
+
+    F1[Image Features A <br/> 1D Vector]:::model
+    F2[Image Features B <br/> 1D Vector]:::model
+    F3[Clinical Features <br/> 1D Vector]:::model
+
+    A1 -->|Global Average Pooling| F1
+    A2 -->|Global Average Pooling| F2
+    M3 -->|Flattening| F3
+
+    FL((Feature Fusion <br/> Concatenation Layer)):::fusion
+
+    F1 --> FL
+    F2 --> FL
+    F3 --> FL
+
+    D1[Fully Connected Layer 1 <br/> + ReLU]:::dense
+    D2[Dropout Layer <br/> 50% dropping rate]:::dense
+    D3[Fully Connected Layer 2 <br/> + ReLU]:::dense
+
+    FL -->|Combined Multi-scale Features| D1
+    D1 --> D2
+    D2 --> D3
+
+    O[Final Output Layer <br/> Softmax / Sigmoid Classification]:::output
+    
+    D3 --> O
