@@ -15,6 +15,10 @@ PROJECT_ROOT = CURRENT_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 BASE_DIR = PROJECT_ROOT
 
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+from pytorch_grad_cam.utils.image import show_cam_on_image
+
 # Import project modules
 from config import DEVICE, NUM_CLASSES, CLASS_NAMES, CLAHE_CLIP_LIMIT, CLAHE_TILE_GRID_SIZE
 
@@ -172,6 +176,14 @@ def preprocess_for_model(image_pil):
     ])
     return transform(image_pil).unsqueeze(0).to(DEVICE)
 
+def get_target_layer(model, model_name):
+    """Get target layer for Grad-CAM."""
+    if 'convnext' in model_name or 'mednext' in model_name:
+        return [model.stages[-1].blocks[-1]]
+    elif 'resnet' in model_name:
+        return [model.layer4[-1]]
+    return None
+
 # --- SIDEBAR ---
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/3004/3004458.png", width=100)
@@ -245,7 +257,35 @@ if image_pil:
                 pred_idx = np.argmax(probs)
                 pred_label = CLASS_NAMES[pred_idx]
                 confidence = probs[pred_idx]
+
+                # Grad-CAM Generation
+                cam_image = None
+                model_map = {
+                    'ConvNeXt V2': 'convnextv2',
+                    'MedNeXt (ConvNeXt-Tiny)': 'mednext',
+                    'ConvNeXt (Best Individual)': 'convnext',
+                    'DeiT (Vision Transformer)': 'deit',
+                    'ResNet-50 (Baseline)': 'resnet',
+                }
+                # Use ConvNeXtV2 as proxy for Ensemble visualization
+                cam_model_name = 'convnextv2' if model_choice == 'Ensemble (All Models)' else model_map.get(model_choice)
                 
+                if cam_model_name and cam_model_name != 'deit':
+                    cam_model = load_model(cam_model_name)
+                    target_layers = get_target_layer(cam_model, cam_model_name)
+                    if target_layers:
+                        try:
+                            # Resize original image to 224x224 to match model input for overlay
+                            resized_img = input_image_pil.resize((224, 224))
+                            rgb_img = np.float32(resized_img) / 255.0
+                            
+                            with GradCAM(model=cam_model, target_layers=target_layers) as cam:
+                                targets = [ClassifierOutputTarget(pred_idx)]
+                                grayscale_cam = cam(input_tensor=input_tensor, targets=targets)[0, :]
+                                cam_image = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
+                        except Exception as e:
+                            st.warning(f"Grad-CAM generation failed: {e}")
+
                 # Determine color based on stage
                 stage_colors = {
                     'F0': '#4CAF50',
@@ -289,9 +329,22 @@ if image_pil:
                         margin=dict(l=20, r=20, t=40, b=20)
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                    
-                # Interpretation
-                st.info(f"**Interpretation:** The model has identified features consistent with **Stage {pred_label}** fibrosis with **{confidence*100:.1f}%** certainty.")
+                
+                st.markdown("---")
+                # XAI Section
+                st.markdown("### 🧠 Explainable AI (Grad-CAM)")
+                if cam_image is not None:
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.image(input_image_pil, caption="Standard Biopsy Image", use_column_width=True)
+                    with c2:
+                        caption = "Grad-CAM Heatmap" if model_choice != 'Ensemble (All Models)' else "Ensemble Highlight (Proxy via ConvNeXt V2)"
+                        st.image(cam_image, caption=caption, use_column_width=True)
+                    st.info(f"**Interpretation:** The heatmap highlights the critical fibrotic areas the model focused on to make its **Stage {pred_label}** determination.")
+                elif model_choice == 'DeiT (Vision Transformer)':
+                    st.info("Grad-CAM visualization is currently tailored for the CNN architectures. To see heatmaps, please select ConvNeXt, MedNeXt, ResNet, or Ensemble.")
+                else:
+                    st.info(f"**Interpretation:** The model has identified features consistent with **Stage {pred_label}** fibrosis with **{confidence*100:.1f}%** certainty.")
             else:
                 st.error("Failed to load model. Please check model checkpoints.")
 
