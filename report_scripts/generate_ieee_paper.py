@@ -7,7 +7,8 @@ from pathlib import Path
 # --- Configuration ---
 MD_FILE = Path(r"d:\Liver-Fibrosis\docs\ieee_paper_draft.md")
 PDF_OUTPUT = Path(r"d:\Liver-Fibrosis\reports\IEEE_Conference_Paper.pdf")
-IMAGE_PATH = Path(r"d:\Liver-Fibrosis\outputs\resnet_confusion_matrix.png")
+CM_PATH = Path(r"d:\Liver-Fibrosis\outputs\final_analysis\ensemble_confusion_matrix.png")
+GRADCAM_PATH = Path(r"d:\Liver-Fibrosis\outputs\gradcam_F4.png")
 
 # Layout Constants (points)
 PAGE_WIDTH = 8.5
@@ -124,32 +125,31 @@ class PDFGenerator:
             
         self.y_cursor -= line_height * 0.5 # Paragraph spacing
 
-    def render_image(self):
-        if not IMAGE_PATH.exists(): return
+    def render_image(self, img_path, caption):
+        if not img_path.exists(): return
         
         # Image takes about 3 inches height
         h = 3.0
         self.check_space(h)
         
-        img = plt.imread(str(IMAGE_PATH))
+        img = plt.imread(str(img_path))
         
         # Calculate bounding box in 0-1 coords
         # Left, Bottom, Width, Height
         x0 = self.x_cursors[self.col_idx] / PAGE_WIDTH
         w = COL_WIDTH / PAGE_WIDTH
         y0 = (self.y_cursor - h) / PAGE_HEIGHT
-        h_norm = h / PAGE_HEIGHT
         
         if y0 < 0: # Should be caught by check_space but safety
             self.new_page()
             y0 = (PAGE_HEIGHT - MARGIN_Y - h) / PAGE_HEIGHT
             
-        ax = self.fig.add_axes([x0, y0, w, h_norm])
+        ax = self.fig.add_axes([x0, y0, w, h / PAGE_HEIGHT])
         ax.imshow(img)
         ax.axis('off')
         
         self.y_cursor -= h
-        self.fig.text((x0 + w/2), (y0 - 0.02), "Fig. 1. Confusion Matrix", **STYLES['caption'])
+        self.fig.text((x0 + w/2), (y0 - 0.02), caption, **STYLES['caption'])
         self.y_cursor -= 0.3
 
     def save(self):
@@ -207,7 +207,12 @@ def parse_markdown_and_render():
         elif line.startswith('_(Figure 1'):
             if current_text: pdf.render_text_block(" ".join(current_text), 'body')
             current_text = []
-            pdf.render_image() # Insert image
+            pdf.render_image(CM_PATH, "Fig. 1. Confusion Matrix (Ensemble)") # Insert image
+
+        elif line.startswith('_(Figure 2'):
+            if current_text: pdf.render_text_block(" ".join(current_text), 'body')
+            current_text = []
+            pdf.render_image(GRADCAM_PATH, "Fig. 2. Grad-CAM Explainability Heatmap") # Insert image
             
         elif line.startswith('|'):
              # Skip tables for now in this simple renderer, just add note
