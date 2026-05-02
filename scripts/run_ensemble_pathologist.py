@@ -190,17 +190,17 @@ def main():
     y_pred = df['ensemble_pred_idx'].values
     
     # Accuracy
-    acc = 0.9905 #accuracy_score(y_true, y_pred)
+    acc = accuracy_score(y_true, y_pred)
     
     # Quadratic Weighted Kappa
-    qwk = 0.9938 #cohen_kappa_score(y_true, y_pred, weights='quadratic')
+    qwk = cohen_kappa_score(y_true, y_pred, weights='quadratic')
     
     # F1 Score
-    f1_macro = 0.9912 #f1_score(y_true, y_pred, average='macro')
+    f1_macro = f1_score(y_true, y_pred, average='macro')
     
     # Precision & Recall (Macro)
-    precision_macro = 0.9904 #precision_score(y_true, y_pred, average='macro')
-    recall_macro = 0.9921 #recall_score(y_true, y_pred, average='macro')
+    precision_macro = precision_score(y_true, y_pred, average='macro')
+    recall_macro = recall_score(y_true, y_pred, average='macro')
     
     print("\n" + "="*40)
     print("ENSEMBLE PERFORMANCE REPORT")
