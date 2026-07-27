@@ -7,6 +7,8 @@ import numpy as np
 from PIL import Image
 import torch
 from torchvision import transforms
+from typing import Union, Optional
+from pathlib import Path
 
 import sys
 sys.path.insert(0, str(__file__).rsplit('src', 1)[0])
@@ -67,27 +69,47 @@ def resize_image(image: np.ndarray, size: int = IMAGE_SIZE) -> np.ndarray:
     return cv2.resize(image, (size, size), interpolation=cv2.INTER_LANCZOS4)
 
 
-def preprocess_image(image_path: str) -> np.ndarray:
+def preprocess_image(image_input: Union[str, Path, np.ndarray, Image.Image],
+                     is_training: Optional[bool] = None,
+                     return_tensor: bool = False) -> Union[np.ndarray, torch.Tensor]:
     """
-    Complete preprocessing pipeline: load, CLAHE, resize.
+    Complete preprocessing pipeline: load/accept image, apply CLAHE enhancement, resize,
+    and optionally transform to normalized PyTorch tensor.
     
     Args:
-        image_path: Path to the input image
+        image_input: File path, numpy array, or PIL Image
+        is_training: If True/False, applies training/validation transforms and returns PyTorch tensor
+        return_tensor: If True, returns PyTorch tensor using validation transforms
         
     Returns:
-        Preprocessed image as numpy array
+        Preprocessed image as numpy array (legacy) or PyTorch tensor (modern)
     """
-    # Load image
-    image = cv2.imread(image_path)
-    if image is None:
-        raise ValueError(f"Could not load image: {image_path}")
-    
-    # Apply CLAHE enhancement
-    enhanced = apply_clahe(image)
-    
-    # Resize to target size
+    if isinstance(image_input, (str, Path)):
+        img_bgr = cv2.imread(str(image_input))
+        if img_bgr is None:
+            raise ValueError(f"Could not load image: {image_input}")
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        pil_img = Image.fromarray(img_rgb)
+    elif isinstance(image_input, np.ndarray):
+        if image_input.ndim == 3 and image_input.shape[2] == 3:
+            # Assume RGB if coming from PIL/array conversion
+            pil_img = Image.fromarray(image_input)
+        else:
+            pil_img = Image.fromarray(image_input)
+    elif isinstance(image_input, Image.Image):
+        pil_img = image_input.convert("RGB")
+    else:
+        raise TypeError(f"Unsupported image input type: {type(image_input)}")
+
+    if return_tensor or is_training is not None:
+        transforms_pipeline = get_train_transforms() if is_training else get_val_transforms()
+        return transforms_pipeline(pil_img)
+
+    # Legacy fallback returning numpy array (BGR enhanced & resized)
+    img_array = np.array(pil_img)
+    img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+    enhanced = apply_clahe(img_bgr)
     resized = resize_image(enhanced)
-    
     return resized
 
 
