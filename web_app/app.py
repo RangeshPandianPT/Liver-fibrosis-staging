@@ -49,25 +49,79 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
+    /* Add modern Google fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700&display=swap');
+
+    html, body, [class*="css"]  {
+        font-family: 'Inter', sans-serif;
+    }
+    
     .main-header {
-        font-size: 2.5rem;
-        color: #1E88E5;
+        font-family: 'Outfit', sans-serif;
+        font-size: 3rem;
+        background: linear-gradient(135deg, #1E88E5 0%, #00B4DB 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         text-align: center;
         font-weight: 700;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
+        padding-top: 1rem;
     }
     .sub-header {
-        font-size: 1.5rem;
-        color: #424242;
+        font-family: 'Inter', sans-serif;
+        font-size: 1.25rem;
+        color: #546E7A;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 2.5rem;
+        font-weight: 500;
+        letter-spacing: 0.5px;
     }
     .metric-container {
-        background-color: #ffffff;
-        border-radius: 10px;
-        padding: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
         text-align: center;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .metric-container:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.1);
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #ffffff;
+        padding: 10px 15px;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px !important;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        padding-left: 20px;
+        padding-right: 20px;
+        transition: all 0.3s;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        color: #1565C0 !important;
+        font-weight: 600 !important;
+    }
+    /* Buttons */
+    .stButton>button {
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.3s ease !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(30, 136, 229, 0.2);
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(30, 136, 229, 0.3);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -335,11 +389,11 @@ with tab_single:
             if show_clahe:
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.image(image_pil, caption="Original Raw Input", use_column_width=True)
+                    st.image(image_pil, caption="Original Raw Input", use_container_width=True)
                 with c2:
                     with st.spinner("Applying CLAHE..."):
                         processed_img = apply_clahe(image_pil)
-                    st.image(processed_img, caption="CLAHE Enhanced", use_column_width=True)
+                    st.image(processed_img, caption="CLAHE Enhanced", use_container_width=True)
             else:
                 st.image(image_pil, caption="Input Biopsy Image", width=400)
 
@@ -462,10 +516,10 @@ with tab_single:
                     if cam_image is not None:
                         c1, c2 = st.columns(2)
                         with c1:
-                            st.image(input_image_pil, caption="Standard Biopsy Image", use_column_width=True)
+                            st.image(input_image_pil, caption="Standard Biopsy Image", use_container_width=True)
                         with c2:
                             caption = "Grad-CAM Heatmap" if model_choice != 'Ensemble (All Models)' else "Ensemble Highlight (Proxy via ConvNeXt V2)"
-                            st.image(cam_image, caption=caption, use_column_width=True)
+                            st.image(cam_image, caption=caption, use_container_width=True)
                         st.info(f"**Interpretation:** The heatmap highlights the critical fibrotic areas the model focused on to make its **Stage {pred_label}** determination.")
                     elif model_choice == 'DeiT (Vision Transformer)':
                         st.info("Grad-CAM visualization is currently tailored for the CNN architectures. To see heatmaps, please select ConvNeXt, MedNeXt, ResNet, or Ensemble.")
@@ -585,9 +639,9 @@ with tab_specs:
     if cm_img_path.exists() and roc_img_path.exists():
         c_vis1, c_vis2 = st.columns(2)
         with c_vis1:
-            st.image(str(cm_img_path), caption="ConvNeXt Confusion Matrix on Test Set", use_column_width=True)
+            st.image(str(cm_img_path), caption="ConvNeXt Confusion Matrix on Test Set", use_container_width=True)
         with c_vis2:
-            st.image(str(roc_img_path), caption="ConvNeXt ROC Curves (Multi-Class AUC)", use_column_width=True)
+            st.image(str(roc_img_path), caption="ConvNeXt ROC Curves (Multi-Class AUC)", use_container_width=True)
     else:
         st.info("Evaluation plots can be generated by running `python report_scripts/generate_convnext_report.py` in your terminal.")
 
